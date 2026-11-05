@@ -30,3 +30,62 @@ body{font-family:AdminPlex,Arial,sans-serif;font-synthesis:none;background:#f0f4
 body:has(#app.as-nav-open){overflow:hidden}
 
 .as-nav-item[data-view="certificate-requests"]{--as-dark-tint:#453e25;--as-dark-icon:#f1d383}
+
+/* 20261105 تنظيم أوضح: شريط علوي ثابت، مجموعات قابلة للطي، دليل كامل للأقسام في النظرة العامة. لا تغيير على المنطق. */
+.admin-shell>.bar{position:sticky;top:0;z-index:30}
+.admin-shell .dock{top:118px}
+.as-sidebar .tabs{gap:3px}
+.as-sidebar .tabs .as-nav-item{min-height:44px;padding:6px 10px;gap:10px}
+.as-nav-item svg{width:32px;height:32px;flex-basis:32px}
+.as-sidebar .tabs .as-group-label{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;background:transparent;border:0;cursor:pointer;text-align:start;font-weight:500;font-size:12px;color:#afc4db;padding:15px 13px 6px;border-radius:8px}
+.as-sidebar .tabs .as-group-label:first-child{padding-top:0}
+.as-group-label>svg{width:15px;height:15px;flex:0 0 15px;opacity:.75;transition:transform .15s}
+.as-group-label[aria-expanded="false"]>svg{transform:rotate(-90deg)}
+.as-group-label:hover{color:#fff}
+.as-group-label:focus-visible{outline:3px solid #9fd1ff;outline-offset:-2px}
+.as-nav-search kbd{font-family:inherit;background:#203c58;border:1px solid #48617c;border-radius:5px;padding:0 7px;font-size:11px;margin-inline-start:5px}
+.as-session-note{margin:10px 2px 0;font-size:11px;line-height:1.9;color:#bdcfe2}
+.as-dir-group{margin-bottom:24px}
+.as-dir-group>h3{display:flex;align-items:center;gap:12px;font-size:15px;font-weight:600;color:#33516f;margin:0 0 12px}
+.as-dir-group>h3::after{content:'';height:1px;flex:1;background:var(--as-line)}
+.as-shortcuts>button{padding:20px}
+.as-shortcuts small{margin-top:14px}
+.as-shortcut-icon{margin-bottom:12px}
+.as-nav-item[data-view="course-projects"]{--as-dark-tint:#194541;--as-dark-icon:#86dfc9}
+.as-shortcuts>[data-as-open="course-projects"]{--as-accent:#157565;--as-tint:#eaf7f2}
+.as-shortcuts>[data-as-open="certificate-requests"]{--as-accent:#8f6a12;--as-tint:#fdf6e3}
+.as-shortcuts>[data-as-open="board-cards"]{--as-accent:#1c7182;--as-tint:#eaf7fa}
+.as-shortcuts>[data-as-open="new-subscribers"]{--as-accent:#29579b;--as-tint:#ecf3ff}
+.as-shortcuts>[data-as-open="course-alerts"]{--as-accent:#a05c17;--as-tint:#fdf1e3}
+.as-shortcuts>[data-as-open="testimonials"]{--as-accent:#93720f;--as-tint:#fbf6e0}
+.as-shortcuts>[data-as-open="payments"]{--as-accent:#15756a;--as-tint:#e9f7f4}
+.as-shortcuts>[data-as-open="branding"]{--as-accent:#8a4b86;--as-tint:#f9eefb}
+@media(max-width:1350px){.admin-shell .dock{top:0}}
+@media(prefers-reduced-motion:reduce){.as-group-label>svg{transition:none}}
+
+/* 20261105-b: مراكز موحّدة — قائمة أقصر وتبويبات فرعية داخل كل مركز. لا تغيير على المنطق. */
+.as-subnav{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 20px;padding:6px;background:#fff;border:1px solid var(--as-line);border-radius:13px;position:sticky;top:94px;z-index:25;box-shadow:0 8px 18px #17365307}
+.as-subnav button{display:inline-flex;align-items:center;gap:8px;background:transparent;border:1px solid transparent;color:#44607e;font-size:14px;font-weight:500;min-height:40px;padding:8px 15px;border-radius:9px}
+.as-subnav button:hover{background:#f0f6fd;color:#103c68}
+.as-subnav button.active{background:var(--as-tint);color:var(--as-accent);border-color:currentColor}
+.as-count{background:#0866cf;color:#fff;border-radius:999px;font-size:11px;line-height:1.7;padding:0 8px;font-weight:600;font-variant-numeric:tabular-nums}
+.as-subnav button.active .as-count{background:var(--as-accent)}
+.as-nav-item.as-hub span{font-weight:600}
+[data-as-hub="training"]{--as-dark-tint:#194541;--as-dark-icon:#86dfc9}
+[data-as-hub="members"]{--as-dark-tint:#174756;--as-dark-icon:#8adeee}
+[data-as-hub="comms"]{--as-dark-tint:#3f3864;--as-dark-icon:#cbbdff}
+[data-as-hub="settings"]{--as-dark-tint:#1c4945;--as-dark-icon:#8be2d0}
+[data-as-sub="courses"],[data-as-sub="course-projects"]{--as-accent:#157565;--as-tint:#eaf7f2}
+[data-as-sub="board-cards"],[data-as-sub="card-directory"]{--as-accent:#1c7182;--as-tint:#eaf7fa}
+[data-as-sub="certificate-requests"]{--as-accent:#8f6a12;--as-tint:#fdf6e3}
+[data-as-sub="memberships"]{--as-accent:#916018;--as-tint:#fff6e5}
+[data-as-sub="message-center"]{--as-accent:#6754a6;--as-tint:#f1edfc}
+[data-as-sub="new-subscribers"]{--as-accent:#29579b;--as-tint:#ecf3ff}
+[data-as-sub="course-alerts"]{--as-accent:#a05c17;--as-tint:#fdf1e3}
+[data-as-sub="testimonials"]{--as-accent:#93720f;--as-tint:#fbf6e0}
+[data-as-sub="payments"]{--as-accent:#15756a;--as-tint:#e9f7f4}
+[data-as-sub="branding"]{--as-accent:#8a4b86;--as-tint:#f9eefb}
+@media(max-width:1100px){.as-subnav{position:static;box-shadow:none}}
+@media(max-width:650px){.as-subnav{margin-bottom:16px;padding:5px}.as-subnav button{font-size:13px;padding:7px 11px;min-height:38px}}
+.as-sidebar .tabs .as-nav-item[aria-current="page"]{background:#294b6b;border-color:#547795;color:#fff}
+.as-nav-item[aria-current="page"]:before{content:'';position:absolute;inset-inline-start:0;height:24px;width:3px;background:var(--as-dark-icon);border-radius:4px}

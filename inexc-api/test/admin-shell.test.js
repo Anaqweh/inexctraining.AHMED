@@ -5,3 +5,22 @@ test('sidebar reuses original nodes and handlers, retains form/payment values an
 test('late-loaded sections are grouped, searchable and keep their own click handlers',async t=>{const h=await harness(t);const b=h.w.document.createElement('button');b.dataset.view='services';b.textContent='الخدمات';let called=0;b.onclick=()=>called++;h.q('.tabs').append(b);await tick();assert.equal(b.dataset.asGroup,'1');assert.equal(b.querySelectorAll('svg').length,1);h.q('.as-nav-search input').value='الخدمات';h.q('.as-nav-search input').dispatchEvent(new h.w.Event('input'));assert.equal(b.hidden,false);assert.equal(h.original[0].hidden,true);b.click();assert.equal(called,1);assert.equal(h.q('.as-nav-empty').hidden,true)});
 test('mobile drawer opens/closes via menu, navigation and Escape and is inert while closed',async t=>{const h=await harness(t);h.mobile(true);assert.equal(h.q('#adminSidebar').inert,true);h.q('.as-menu').click();assert.equal(h.q('#adminSidebar').inert,false);assert.equal(h.q('.as-menu').getAttribute('aria-expanded'),'true');assert.equal(h.w.document.activeElement,h.q('.as-close'));h.q('#adminSidebar').dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(h.q('#adminSidebar').inert,true);assert.equal(h.q('.as-backdrop').hidden,true);h.q('.as-menu').click();h.original[1].click();assert.equal(h.q('.as-menu').getAttribute('aria-expanded'),'false');h.mobile(false);assert.equal(h.q('#adminSidebar').inert,false);});
 test('overview mirrors loaded registration metrics and clears them on logout',async t=>{const h=await harness(t);h.w.dispatchEvent(new h.w.Event('inexc:unlocked'));assert.equal(h.q('[data-as-metric=total]').textContent,'14');h.q('#total').textContent='15';await tick();assert.equal(h.q('[data-as-metric=total]').textContent,'15');h.q('[data-view=overview]').click();await tick();assert.equal(h.q('#overview').classList.contains('active'),true);h.w.dispatchEvent(new h.w.Event('inexc:locked'));assert.equal(h.q('[data-as-metric=total]').textContent,'—')});
+
+test('overview directory lists mounted sections by group and opens them',async t=>{const h=await harness(t);const card=h.q('#overview .as-directory [data-as-open="courses"]');assert.ok(card);assert.equal(card.querySelector('strong').textContent,'الدورات التدريبية');card.click();await tick();assert.equal(h.calls(),1);assert.equal(h.q('.as-page-heading h1').textContent,'الدورات التدريبية');const b=h.w.document.createElement('button');b.dataset.view='services';b.textContent='الخدمات';h.q('.tabs').append(b);await tick();assert.ok(h.q('#overview .as-directory [data-as-open="services"]'));});
+
+test('merged sections collapse into hubs whose nav and sub-tabs proxy the original handlers',async t=>{const h=await harness(t);
+ assert.equal(h.original[1].hidden,true);assert.equal(h.original[0].hidden,false);
+ const hub=h.q('[data-as-hub="training"]');assert.ok(hub);hub.click();await tick();
+ assert.equal(h.calls(),1);assert.equal(h.q('.as-page-heading h1').textContent,'الدورات التدريبية');
+ const sub=h.q('.as-subnav');assert.equal(sub.hidden,false);assert.equal(sub.querySelector('[data-as-sub="courses"]').classList.contains('active'),true);
+ h.q('[data-as-hub="settings"]').click();await tick();assert.equal(h.calls(),2);
+ assert.equal(sub.querySelector('[data-as-sub="payments"]').classList.contains('active'),true);assert.equal(hub.hasAttribute('aria-current'),false);assert.equal(h.q('[data-as-hub="settings"]').getAttribute('aria-current'),'page');
+ sub.querySelector('[data-as-sub="payments"]').click();await tick();assert.equal(h.calls(),3);});
+
+test('search reveals merged originals, sub-tabs mirror live counters, and last hub member is remembered',async t=>{const h=await harness(t);
+ h.q('.as-nav-search input').value='الدورات';h.q('.as-nav-search input').dispatchEvent(new h.w.Event('input'));assert.equal(h.original[1].hidden,false);
+ h.q('.as-nav-search input').value='';h.q('.as-nav-search input').dispatchEvent(new h.w.Event('input'));assert.equal(h.original[1].hidden,true);
+ h.q('[data-as-hub="comms"]').click();await tick();
+ assert.equal(h.q('.as-page-heading h1').textContent,'المشتركون الجدد');
+ assert.equal(h.q('.as-subnav [data-as-sub="new-subscribers"] .as-count').textContent,'5');
+ assert.equal(h.w.sessionStorage.getItem('inexc_admin_hub_last_v1').includes('new-subscribers'),true);});
