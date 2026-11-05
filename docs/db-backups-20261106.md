@@ -5,7 +5,7 @@
 ## التثبيت (مرة واحدة، على الخادم)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Anaqweh/re/master/scripts/setup-db-backups.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Anaqweh/inexctraining.AHMED/master/scripts/setup-db-backups.sh | sudo bash
 ```
 
 يتحقق من البيئة (compose، خدمة db، ‏pg_dump)، يثبّت السكربتين في `/opt/inexc-training/backups/bin/`، يضيف cron يوميًا (02:17 بتوقيت الخادم)، **ويأخذ أول نسخة فورًا** ويطبع نتيجتها.
