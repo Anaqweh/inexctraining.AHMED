@@ -86,6 +86,7 @@ test('sharing saves a safe PNG before the public link can be copied',async()=>{
  const id='a'.repeat(64),url='https://api.inexctraining.com/api/memberships/card/public/'+id;
  const dialog=d.querySelector('#shareDialog');dialog.showModal=()=>{dialog.open=true};
  let create,upload,rendered;
+ w.URL.createObjectURL=()=>'blob:local-share-preview';w.URL.revokeObjectURL=()=>{};
  w.TraineeCard.socialPreviewPNG=async(data,options)=>{rendered={data,options};return new w.Blob(['png'],{type:'image/png'})};
  w.fetch=async(path,options)=>{
   if(path.endsWith('/memberships/card/share')){create={path,options};return {ok:true,json:async()=>({url})}}
@@ -94,9 +95,9 @@ test('sharing saves a safe PNG before the public link can be copied',async()=>{
  w.navigator.clipboard={writeText:async value=>{assert.equal(value,url+'?v=1');assert.doesNotMatch(value,/private-bearer|INX-EXAMPLE-001/)}};
  d.querySelector('#openShare').click();for(let i=0;i<20&&!upload;i++)await tick();
  assert.equal(dialog.open,true);
- assert.equal(d.querySelector('#shareCardPreview .tc-name').textContent,'اسم حامل البطاقة');
- assert.equal(d.querySelector('#shareCardPreview .tc-number').textContent,'INEXC');
- assert.equal(d.querySelector('#shareCardPreview .tc-card-type strong').textContent,'بطاقة الانطلاقة');
+ // المعاينة الآن هي صورة PNG الفعلية المولّدة (نفس الملف المرفوع)، لا نسخة DOM من البطاقة.
+ const previewImage=d.querySelector('#shareCardPreview img.share-preview-image');
+ assert.ok(previewImage);assert.match(previewImage.alt,/اسم حامل البطاقة/);assert.match(previewImage.alt,/بطاقة الانطلاقة/);
  assert.equal(rendered.data.digitalId.idNumber,'INEXC');
  assert.equal(rendered.options.qrUrl,url);
  assert.equal(JSON.parse(create.options.body).token,'private-bearer');
