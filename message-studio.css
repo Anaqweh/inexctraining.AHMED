@@ -33,3 +33,26 @@
 
 .ms-site-link-save{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:15px}.ms-site-link-save span{font-size:13px;color:#47647d}.ms-site-link-save button{min-height:42px}
 .subscriber-list-success{text-align:center;padding:7px 0 2px}.subscriber-list-success .subscriber-list-check{display:grid;place-items:center;width:54px;height:54px;margin:0 auto 15px;border-radius:50%;background:#e4f7ec;color:#177a4b;font-size:30px;font-weight:700}.subscriber-list-success h3{color:#177a4b}.subscriber-list-success p{text-align:center;line-height:1.9;margin:13px 0 20px}.subscriber-list-success button{min-width:140px}.subscriber-added-inline{display:block;margin-top:7px;color:#177a4b;font-weight:700;line-height:1.6}
+
+/* 20261105-flow1: إنشاء الرسالة في خطوات مرقمة؛ التصميم اختياري ومطوي؛ ترويسة مدمجة داخل قشرة الإدارة. */
+.ms .compose-form{display:grid;gap:14px;align-content:start}
+.ms .compose-step{padding:20px 22px}
+.ms .step-head{display:flex;gap:13px;align-items:flex-start;margin-bottom:16px;padding-bottom:13px;border-bottom:1px solid var(--line)}
+.ms .step-num{width:31px;height:31px;flex:0 0 31px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;font-weight:600;font-size:15px}
+.ms .step-head h3{font-size:16px;line-height:1.5}
+.ms .step-head .hint{margin-top:2px;font-size:13px}
+.ms .compose-step .body-label{margin-top:18px}
+.ms .compose-design{background:#fbfdff;border-style:dashed}
+.ms .compose-design .step-num{background:#5b7591}
+.ms .compose-design .design-editor{border:0;background:transparent;margin:0;padding:0}
+.ms .compose-design .design-editor>summary{display:inline-flex;align-items:center;gap:8px;border:1px solid #cbdcf1;background:#fff;border-radius:7px;padding:10px 15px;min-height:42px}
+.ms .compose-design .design-editor>summary:hover{background:var(--tint)}
+.ms .compose-design .design-editor[open]>summary{margin-bottom:14px}
+.ms .compose-design .design-map{margin:0 0 14px}
+.ms .compose-actions{border-color:#b9cede;box-shadow:0 -6px 18px #17324d0d}
+.ms .compose-actions button.primary{min-height:46px;padding-inline:22px;font-weight:600}
+.admin-shell .ms .header>div:first-child{display:none}
+.admin-shell .ms .header{justify-content:flex-end;padding:0 0 12px}
+.admin-shell .ms .nav [data-nav="new-subscribers"]{display:none}
+.admin-shell .ms .nav{margin-bottom:18px}
+@media(max-width:500px){.ms .compose-step{padding:15px}.ms .step-head{gap:10px}}
