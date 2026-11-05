@@ -74,7 +74,7 @@ test('permanent exclusions survive deletion, reimport, old subscription flows an
  });
  await t.test('legacy unsubscribe links record optout without assigning an invented campaign',async()=>{
    const source=await fs.readFile(new URL('../server.js',import.meta.url),'utf8'),handlers={};
-   vm.runInNewContext(source.slice(source.indexOf("for (const [route,table]"),source.indexOf("app.get('/api/testimonials'")),{app:{get:(p,fn)=>handlers[p]=fn},pool:h.pool,suppressEmail,clean:v=>String(v||'')});
+   vm.runInNewContext(source.slice(source.indexOf("for (const [route,table]"),source.indexOf("app.get('/api/testimonials'")),{app:{get:(p,fn)=>handlers[p]=fn,post:()=>{}},pool:h.pool,suppressEmail,clean:v=>String(v||'')});
    const res={status(){return this},type(){return this},send(){return this}};
    await handlers['/api/course-alerts/unsubscribe']({query:{token:'course-old'}},res,e=>{throw e});
    const event=(await h.query("SELECT * FROM message_unsubscribe_events WHERE email='course@example.com'")).rows[0];assert.equal(event.campaign_id,null);

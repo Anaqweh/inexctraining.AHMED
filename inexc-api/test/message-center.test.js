@@ -125,7 +125,7 @@ test('registration CSV hides opted-out addresses while retaining transaction row
   let handler,output,error;
   const rows=[{reference:'REG-1',name:'Blocked',email:' BLOCKED@EXAMPLE.COM ',total:100},{reference:'REG-2',name:'Allowed',email:'allowed@example.com',total:200}];
   const pool={query:async(sql)=>({rows:sql.startsWith('SELECT reference')?rows:[{email:'blocked@example.com'}]})};
-  const context=vm.createContext({app:{get:(_path,_auth,fn)=>handler=fn},auth:()=>{},pool,blockedEmails,normalizeEmail:value=>String(value||'').trim().toLowerCase()});
+  const context=vm.createContext({app:{get:(_path,_auth,fn)=>handler=fn},auth:()=>{},pool,blockedEmails,normalizeEmail:value=>String(value||'').trim().toLowerCase(),trainingPackageText:value=>String(value??'').replaceAll('بطاق','باق')});
   vm.runInContext(routeSource,context);
   const response={set(){return this},send(v){output=v}};
   await handler({},response,e=>error=e);assert.equal(error,undefined);assert.match(output,/REG-1/);assert.match(output,/100/);assert.match(output,/allowed@example.com/);assert.doesNotMatch(output,/blocked@example.com/i);

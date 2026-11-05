@@ -51,7 +51,7 @@ test('real registration handler accepts link payment without a receipt and never
  const app=express();app.use(express.json());const emails=[];
  const start=serverSource.indexOf("app.post('/api/registrations',"),end=serverSource.indexOf("app.post('/api/institution-requests',",start);
  assert.ok(start>0&&end>start);
- new Function('app','upload','pool','clean','reference','validateCoursePayment','sendRegistrationEmails',serverSource.slice(start,end))(app,{single:()=>((_req,_res,next)=>next())},h.pool,(v,max=400)=>String(v??'').trim().slice(0,max),()=>crypto.randomUUID(),validateCoursePayment,r=>emails.push(r));
+ new Function('app','upload','pool','clean','reference','validateCoursePayment','sendRegistrationEmails','rejectSuppressedCourse',serverSource.slice(start,end))(app,{single:()=>((_req,_res,next)=>next())},h.pool,(v,max=400)=>String(v??'').trim().slice(0,max),()=>crypto.randomUUID(),validateCoursePayment,r=>emails.push(r),(_req,_res,next)=>next());
  app.use((error,_req,res,_next)=>res.status(error.status||500).json({error:error.message}));
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
  const request=async(body)=>{const r=await fetch('http://127.0.0.1:'+server.address().port+'/api/registrations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({course_id:course,name:'LOCAL',email:'local@example.invalid',phone:'000000',...body})});return {status:r.status,data:await r.json()}};
