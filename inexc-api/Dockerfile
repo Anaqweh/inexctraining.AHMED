@@ -2,6 +2,11 @@ FROM node:22-bookworm-slim
 RUN apt-get update \
   && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-ara poppler-utils unzip antiword python3-xlrd python3-pil \
   && rm -rf /var/lib/apt/lists/*
+# حائط الأعمال: تحويل Word/PowerPoint/Excel إلى PDF ثم صور، وخطوط عربية (أميري) لختم توقيع التميز
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui fonts-hosny-amiri fonts-noto-core fonts-kacst fonts-dejavu-core fonts-liberation libraqm0 \
+  && (apt-get install -y --no-install-recommends python3-arabic-reshaper python3-bidi || true) \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev
@@ -19,3 +24,5 @@ COPY project-receipt.js ./
 COPY certificate-link-payments.js ./
 
 COPY admin-registration-income.js ./
+
+COPY course-wall.js wall-render.py ./
