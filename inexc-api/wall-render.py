@@ -94,9 +94,9 @@ def stamp(img, meta, page_no, total):
     out.paste(img, (0, 0))
     d = ImageDraw.Draw(out)
     top = img.height
-    for y in range(band):  # تدرج كحلي
+    for y in range(band):  # تدرج الأزرق الغامق الرسمي (#0d4689 → #0b4ea2)
         t = y / band
-        d.line([(0, top + y), (w, top + y)], fill=(int(11 + 8 * t), int(43 + 12 * t), int(85 + 20 * t)))
+        d.line([(0, top + y), (w, top + y)], fill=(int(13 - 2 * t), int(70 + 8 * t), int(137 + 25 * t)))
     d.rectangle([0, top, w, top + max(3, band // 16)], fill=(212, 167, 58))  # خيط ذهبي
     pad = int(band * 0.3)
     big = font(ARABIC_BOLD, int(band * 0.42))
@@ -166,9 +166,14 @@ def main():
             return
         pages = list(pages)[:MAX_PAGES]
         total = len(pages)
+        stamped = []
         for i, img in enumerate(pages, 1):
             page = stamp(fit(img), meta, i, total)
             page.save(os.path.join(out_dir, f"page-{i:03d}.png"), "PNG", optimize=True)
+            stamped.append(page)
+        # نسخة PDF مختومة للتنزيل: الصفحات نفسها بالختم
+        if stamped:
+            stamped[0].save(os.path.join(out_dir, "stamped.pdf"), "PDF", save_all=True, append_images=stamped[1:], resolution=DPI)
         print(f"PAGES={total}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
