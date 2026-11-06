@@ -55,6 +55,7 @@ test('a board is created by anyone, its admin key arrives by email only, trainee
  const ready=await waitReady(api,code,up.data.item.id,member);assert.equal(ready.status,'ready');assert.equal(ready.pages,1);assert.equal(ready.mine,true);
  const page=await api(`/api/wall/items/${ready.id}/pages/1`);assert.equal(page.status,200);assert.equal(page.headers.get('content-type'),'image/png');assert.ok(page.data.length>100);
  assert.equal((await api(`/api/wall/items/${ready.id}/pages/2`)).status,404);
+ const stamped=await api(`/api/wall/items/${ready.id}/stamped.pdf`);assert.equal(stamped.status,200);assert.equal(stamped.headers.get('content-type'),'application/pdf');assert.ok(stamped.data.slice(0,4).toString()==='%PDF');assert.equal(ready.stampedUrl,`/wall/items/${ready.id}/stamped.pdf`);
  const file=await api(`/api/wall/items/${ready.id}/file`);assert.equal(file.status,200);assert.match(file.headers.get('content-disposition'),/inline/);
  assert.equal((await api('/api/wall/boards/'+code+'/items','POST',form({},{field:'file',data:png1x1,type:'image/png',name:'x.png'}))).status,401);
  // تفاعل وتعليقات (التعليقات متوقفة من المدير ثم تُفعَّل)
