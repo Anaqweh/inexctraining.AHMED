@@ -61,38 +61,22 @@ function render(){
  const cols=b.mode==='single'?[{name:'حائط الدفعة',index:0}]:[...(b.mode==='both'?[{name:'أعمال فردية',index:-1}]:[]),...b.groups.map((g,i)=>({name:g,index:i}))];
  for(const c of cols){
   const items=b.items.filter(it=>b.mode==='single'||it.group===c.index);
-  const col=document.createElement('div');col.className='col';
-  const canAdd=b.settings.uploadsOpen&&!b.settings.closed;
-  col.innerHTML=`<div class="col-head"><h2>${esc(c.name)} <span class="count">${items.length}</span></h2>${canAdd?'<button type="button" class="primary add-top">أضف عملك</button>':''}</div><div class="cards"></div>`;
-  col.querySelector('.add-top')?.addEventListener('click',()=>startUpload(c.index));
+  const col=document.createElement('div');col.className='col';col.innerHTML=`<h2>${esc(c.name)} <small>${items.length} ${items.length===1?'عمل':'أعمال'}</small></h2><div class="cards"></div>`;
   const cards=col.querySelector('.cards');
   for(const it of items){const idx=state.items.push(it)-1;cards.append(cardEl(it,idx))}
-  if(canAdd){const add=document.createElement('div');add.className='card add';add.innerHTML=`<div class="add-ico">${ICON.upload}</div><h3>شارك عملك مع الدفعة</h3><p>أضف ملفك ليشاهده زملاؤك ويتفاعلوا معه.</p><button type="button" class="primary">اختيار ملف</button><small>أي نوع ملف · حتى 25 ميغابايت</small>`;add.querySelector('button').addEventListener('click',()=>startUpload(c.index));cards.append(add)}
-  else if(!items.length)cards.innerHTML='<p class="empty">لا أعمال في هذا القسم بعد.</p>';
+  if(b.settings.uploadsOpen&&!b.settings.closed){const add=document.createElement('button');add.type='button';add.className='add';add.innerHTML=`<span>+</span>ارفع عملك`;add.addEventListener('click',()=>startUpload(c.index));cards.append(add)}
+  else if(!items.length)cards.innerHTML='<p class="empty">لا أعمال بعد.</p>';
   board.append(col);
  }
  if(qs.get('w')&&!render.opened){const i=state.items.findIndex(x=>x.id===qs.get('w'));if(i>=0){render.opened=true;openViewer(i)}}
 }
-const ICON={
- like:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3Z"/><path d="M7 11l4.2-7.4a1.8 1.8 0 0 1 3.3 1.3L13.6 9H19a2 2 0 0 1 2 2.3l-1.1 6.6A2.5 2.5 0 0 1 17.4 20H7"/></svg>',
- comment:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H8l-4 3v-6.5A8 8 0 1 1 21 12Z"/></svg>',
- upload:'<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>',
- pages:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h7l5 5v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5"/></svg>'};
 function cardEl(it,idx){
- const el=document.createElement('article');el.className='card'+(it.mine?' mine':'');el.style.setProperty('--pc',colorOf(it.author));
- const preview=it.status==='ready'&&it.pages>0?`<img loading="lazy" alt="" src="${API}${it.pageUrl}1">`:`<span class="ico">${icons[it.kind]||icons.other}</span><span class="fname"><bdi>${esc(it.fileName)}</bdi></span>`;
- const state_=it.status==='processing'?'<span class="badge warn">جارٍ تجهيز الصفحات…</span>':it.status==='failed'?'<span class="badge bad">تعذّر تحويل الملف</span>':!it.approved?'<span class="badge warn">بانتظار اعتماد المدير</span>':'';
- const typeChip=`<span class="type">${it.kind==='pdf'?'PDF':kindLabel[it.kind]||'ملف'}</span>`;
- el.innerHTML=`<button type="button" class="preview" aria-label="فتح العمل">${preview}${typeChip}${it.mine?'<span class="badge me">عملك</span>':''}${state_}</button>
-  <div class="info"><h3 class="ttl"><bdi>${esc(it.title)}</bdi></h3><div class="by"><span class="dot"></span>${esc(it.author)}</div><div class="pages">${ICON.pages}<span>${metaOf(it)}</span></div></div>
-  <div class="acts"><button type="button" class="act like" aria-pressed="${!!it.myLike}" aria-label="أعجبني">${ICON.like}<span>${it.likes}</span></button><button type="button" class="act cmt" aria-label="التعليقات">${ICON.comment}<span>${it.comments}</span></button></div>`;
- el.querySelector('.preview').addEventListener('click',()=>openViewer(idx));
- el.querySelector('.like').addEventListener('click',e=>{e.stopPropagation();reactItem(it,'like',el)});
- el.querySelector('.cmt').addEventListener('click',e=>{e.stopPropagation();openViewer(idx,true)});
- return el;
+ const el=document.createElement('article');el.className='card'+(it.mine?' mine':'');el.style.setProperty('--pc',colorOf(it.author));el.tabIndex=0;
+ const thumb=it.status==='ready'&&it.pages>0?`<img loading="lazy" alt="" src="${API}${it.pageUrl}1">`:`<span class="ico">${icons[it.kind]||icons.other}</span><span class="fname"><bdi>${esc(it.fileName)}</bdi></span>`;
+ const badge=it.status==='processing'?'<span class="badge warn">⏳ جارٍ تجهيز الصفحات…</span>':it.status==='failed'?'<span class="badge bad">تعذّر تحويل الملف</span>':!it.approved?'<span class="badge warn">بانتظار اعتماد المدير</span>':'';
+ el.innerHTML=`<div class="thumb">${thumb}</div>${badge||(it.mine?'<span class="badge me">عملك</span>':'')}<div class="meta"><b>${esc(it.author)}</b><span class="ttl"><bdi>${esc(it.title)}</bdi></span><small><span>${metaOf(it)}</span><span>👍 ${it.likes} &nbsp; 💬 ${it.comments}</span></small></div>`;
+ el.addEventListener('click',()=>openViewer(idx));el.addEventListener('keydown',e=>{if(e.key==='Enter')openViewer(idx)});return el;
 }
-function paintCardActs(it,el){if(!el)return;const l=el.querySelector('.like');l.setAttribute('aria-pressed',String(!!it.myLike));l.querySelector('span').textContent=it.likes;el.querySelector('.cmt span').textContent=it.comments}
-async function reactItem(it,kind,el){if(!state.board.settings.reactions)return say('التفاعل متوقف في هذه اللوحة');if(!state.me)return openJoin(()=>reactItem(it,kind,el));try{const r=await api(`/wall/items/${it.id}/react`,{method:'POST',body:{kind}});it.likes=r.likes;it.ideas=r.ideas;if(kind==='like')it.myLike=r.active;else it.myIdea=r.active;paintCardActs(it,el);if(vw.open&&current()===it)paintSocial(it)}catch(err){say(err.message,4000)}}
 const metaOf=it=>it.pages>1?`${it.pages} صفحة`:it.pages===1?'صفحة واحدة':kindLabel[it.kind]||'ملف';
 
 /* ——— المدير ——— */
@@ -164,7 +148,7 @@ ud.addEventListener('click',e=>{if(e.target===ud&&!upBusy)ud.close()});
 
 /* ——— العارض ——— */
 const vw=$('viewer');let vIdx=0,page=1,vItem=null,vPoll=null;
-function openViewer(i,toComments){vIdx=i;page=1;paintViewer();if(!vw.open)vw.showModal();if(toComments)setTimeout(()=>{$('vc-text').focus();$('v-social').scrollIntoView({block:'nearest'})},150)}
+function openViewer(i){vIdx=i;page=1;paintViewer();if(!vw.open)vw.showModal()}
 function current(){return state.items[vIdx]}
 async function paintViewer(){
  const it=current();if(!it)return;vItem=it;clearTimeout(vPoll);
@@ -199,11 +183,11 @@ function paintSocial(it){
  $('r-like').querySelector('b').textContent=it.likes;$('r-idea').querySelector('b').textContent=it.ideas;
  $('r-like').setAttribute('aria-pressed',String(!!it.myLike));$('r-idea').setAttribute('aria-pressed',String(!!it.myIdea));
 }
-async function react(kind){const it=current();if(!state.me)return openJoin(()=>{vw.showModal();react(kind)});try{const r=await api(`/wall/items/${it.id}/react`,{method:'POST',body:{kind}});it.likes=r.likes;it.ideas=r.ideas;if(kind==='like')it.myLike=r.active;else it.myIdea=r.active;paintSocial(it);paintCardActs(it,[...document.querySelectorAll('.card')][state.items.indexOf(it)])}catch(err){say(err.message,4000)}}
+async function react(kind){const it=current();if(!state.me)return openJoin(()=>{vw.showModal();react(kind)});try{const r=await api(`/wall/items/${it.id}/react`,{method:'POST',body:{kind}});it.likes=r.likes;it.ideas=r.ideas;if(kind==='like')it.myLike=r.active;else it.myIdea=r.active;paintSocial(it)}catch(err){say(err.message,4000)}}
 $('r-like').addEventListener('click',()=>react('like'));$('r-idea').addEventListener('click',()=>react('idea'));
 async function loadComments(it){const list=$('v-comments');list.replaceChildren();if(!state.board.settings.comments)return;try{const r=await api(`/wall/items/${it.id}/comments`);if(current()!==it)return;for(const c of r.comments)list.append(commentEl(c));it.comments=r.comments.length}catch{}}
 function commentEl(c){const d=document.createElement('div');d.className='v-comment';const b=document.createElement('b');b.textContent=c.author;const sm=document.createElement('small');sm.textContent=' · '+new Date(c.createdAt).toLocaleTimeString('ar-AE',{hour:'2-digit',minute:'2-digit'});d.append(b,sm);if(c.body){const p=document.createElement('p');p.textContent=c.body;d.append(p)}if(c.imageUrl){const im=document.createElement('img');im.alt='صورة مرفقة';im.loading='lazy';im.src=API+c.imageUrl;d.append(im)}if(c.mine||state.board.isOwner){const x=document.createElement('button');x.type='button';x.className='del';x.textContent='حذف';x.addEventListener('click',async()=>{try{await api('/wall/comments/'+c.id,{method:'DELETE'});d.remove()}catch(err){say(err.message)}});d.append(x)}return d}
-async function postComment(body,file){const it=current();if(!state.me)return openJoin(()=>{vw.showModal();postComment(body,file)});if(!body&&!file)return;const fd=new FormData();fd.append('body',body);if(file)fd.append('image',file,file.name);$('vc-send').disabled=true;try{const r=await api(`/wall/items/${it.id}/comments`,{method:'POST',form:fd});$('v-comments').append(commentEl(r.comment));$('vc-text').value='';$('v-comments').lastElementChild.scrollIntoView({block:'nearest'});it.comments++;paintCardActs(it,[...document.querySelectorAll('.card')][state.items.indexOf(it)])}catch(err){say(err.message,4000)}finally{$('vc-send').disabled=false}}
+async function postComment(body,file){const it=current();if(!state.me)return openJoin(()=>{vw.showModal();postComment(body,file)});if(!body&&!file)return;const fd=new FormData();fd.append('body',body);if(file)fd.append('image',file,file.name);$('vc-send').disabled=true;try{const r=await api(`/wall/items/${it.id}/comments`,{method:'POST',form:fd});$('v-comments').append(commentEl(r.comment));$('vc-text').value='';$('v-comments').lastElementChild.scrollIntoView({block:'nearest'});it.comments++}catch(err){say(err.message,4000)}finally{$('vc-send').disabled=false}}
 $('vc-send').addEventListener('click',()=>postComment($('vc-text').value.trim(),null));
 $('vc-text').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();postComment(e.target.value.trim(),null)}});
 $('vc-file').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(f)postComment($('vc-text').value.trim(),f)});
