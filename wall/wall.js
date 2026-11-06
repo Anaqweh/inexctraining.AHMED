@@ -57,6 +57,7 @@ function render(){
  $('enter').hidden=!!state.me;$('upload-btn').hidden=!(state.me&&b.settings.uploadsOpen&&!b.settings.closed);
  $('b-status').className='status';$('b-status').textContent=b.settings.closed?'أغلق مدير اللوحة الدخول إليها حاليًا.':(!state.me?'ادخل باسمك لتتمكن من رفع عملك والتعليق على الأعمال.':'');
  renderAdmin();
+ const liked=[...b.items].filter(i=>i.likes>0).sort((x,y)=>y.likes-x.likes)[0];state.topId=liked?liked.id:null;
  const board=$('board');board.replaceChildren();board.classList.toggle('single',b.mode==='single');state.items=[];
  const cols=b.mode==='single'?[{name:'حائط الدفعة',index:0}]:[...(b.mode==='both'?[{name:'أعمال فردية',index:-1}]:[]),...b.groups.map((g,i)=>({name:g,index:i}))];
  for(const c of cols){
@@ -64,17 +65,19 @@ function render(){
   const col=document.createElement('div');col.className='col';col.innerHTML=`<h2>${esc(c.name)} <small>${items.length} ${items.length===1?'عمل':'أعمال'}</small></h2><div class="cards"></div>`;
   const cards=col.querySelector('.cards');
   for(const it of items){const idx=state.items.push(it)-1;cards.append(cardEl(it,idx))}
-  if(b.settings.uploadsOpen&&!b.settings.closed){const add=document.createElement('button');add.type='button';add.className='add';add.innerHTML=`<span>+</span>ارفع عملك`;add.addEventListener('click',()=>startUpload(c.index));cards.append(add)}
+  if(b.settings.uploadsOpen&&!b.settings.closed){const add=document.createElement('button');add.type='button';add.className='add';add.innerHTML=`<span>+</span><b>ارفع عملك</b><i>العمل رقم ${String(b.items.length+1).padStart(2,'0')} في المعرض</i><em>PDF · Word · PowerPoint · صور · فيديو — يُختم تلقائيًا بتوقيع التميز</em>`;add.addEventListener('click',()=>startUpload(c.index));cards.append(add)}
   else if(!items.length)cards.innerHTML='<p class="empty">لا أعمال بعد.</p>';
   board.append(col);
  }
  if(qs.get('w')&&!render.opened){const i=state.items.findIndex(x=>x.id===qs.get('w'));if(i>=0){render.opened=true;openViewer(i)}}
 }
 function cardEl(it,idx){
- const el=document.createElement('article');el.className='card'+(it.mine?' mine':'');el.style.setProperty('--pc',colorOf(it.author));el.tabIndex=0;
+ const el=document.createElement('article');el.className='card'+(it.mine?' mine':'')+(it.pages>1?' stack':'');el.style.setProperty('--pc',colorOf(it.author));el.tabIndex=0;
  const thumb=it.status==='ready'&&it.pages>0?`<img loading="lazy" alt="" src="${API}${it.pageUrl}1">`:`<span class="ico">${icons[it.kind]||icons.other}</span><span class="fname"><bdi>${esc(it.fileName)}</bdi></span>`;
- const badge=it.status==='processing'?'<span class="badge warn">⏳ جارٍ تجهيز الصفحات…</span>':it.status==='failed'?'<span class="badge bad">تعذّر تحويل الملف</span>':!it.approved?'<span class="badge warn">بانتظار اعتماد المدير</span>':'';
- el.innerHTML=`<div class="thumb">${thumb}</div>${badge||(it.mine?'<span class="badge me">عملك</span>':'')}<div class="meta"><b>${esc(it.author)}</b><span class="ttl"><bdi>${esc(it.title)}</bdi></span><small><span>${metaOf(it)}</span><span>👍 ${it.likes} &nbsp; 💬 ${it.comments}</span></small></div>`;
+ const badge=it.status==='processing'?'<span class="badge warn">جارٍ تجهيز الصفحات…</span>':it.status==='failed'?'<span class="badge bad">تعذّر تحويل الملف</span>':!it.approved?'<span class="badge warn">بانتظار اعتماد المدير</span>':'';
+ const top=state.topId===it.id?'<span class="badge star">الأكثر إعجابًا</span>':'';
+ const no=String(state.board.items.length-state.board.items.indexOf(it)).padStart(2,'0');
+ el.innerHTML=`<div class="thumb">${thumb}<span class="open">افتح العمل</span></div>${badge||top||(it.mine?'<span class="badge me">عملك</span>':'')}<span class="no" dir="ltr">№ ${no}</span><div class="meta"><b>${esc(it.author)}</b><span class="ttl"><bdi>${esc(it.title)}</bdi></span><small><span>${metaOf(it)}</span><span>👍 ${it.likes} &nbsp; 💬 ${it.comments}</span></small></div>`;
  el.addEventListener('click',()=>openViewer(idx));el.addEventListener('keydown',e=>{if(e.key==='Enter')openViewer(idx)});return el;
 }
 const metaOf=it=>it.pages>1?`${it.pages} صفحة`:it.pages===1?'صفحة واحدة':kindLabel[it.kind]||'ملف';
