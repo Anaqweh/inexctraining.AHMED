@@ -8,7 +8,7 @@
 <title>حائط الأعمال | INEXC Training</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&display=swap">
-<link rel="stylesheet" href="/wall/wall.css?v=20261107-1">
+<link rel="stylesheet" href="/wall/wall.css?v=20261107-2">
 <script defer src="/inexc-registration-config.js"></script>
 <script defer src="/wall/wall.js?v=20261107-1"></script>
 <meta property="og:type" content="website">
@@ -25,13 +25,13 @@
 <body>
 <div class="wrap">
   <div class="brandbar">
-    <a class="logo" href="/"><img src="/assets/inexc-logo-official-source.png" alt="INEXC Training"><span>التميز الابتكاري <small>INEXC TRAINING · حائط الأعمال</small></span></a>
+    <a class="logo" href="/"><img src="/assets/inexc-logo-official-source.png" alt="INEXC Training"><span>التميز الابتكاري <small>حائط الأعمال</small></span></a>
     <div class="who-bar" id="who-bar" hidden><span>أنت: <b id="who-name"></b></span><button id="logout" class="ghost">خروج</button></div>
   </div>
 
   <!-- إنشاء لوحة جديدة -->
   <section id="create-view" hidden>
-    <header class="hero"><div><span class="eyebrow">INEXC TRAINING · حائط الأعمال</span><h1>أنشئ لوحة أعمال لدورتك</h1><p class="lead">رابط واحد يشاركه الجميع: كل متدرب يكتب اسمه ويرفع عمله، ويُختم ملفه تلقائيًا بتوقيع التميز، ويعرضه الجميع ويعلّقون عليه. أنت مدير اللوحة وإعداداتها كلها بيدك.</p></div></header>
+    <header class="hero"><div><h1>أنشئ لوحة أعمال لدورتك</h1><p class="lead">رابط واحد يشاركه الجميع: كل متدرب يكتب اسمه ويرفع عمله، ويُختم ملفه تلقائيًا بتوقيع التميز، ويعرضه الجميع ويعلّقون عليه. أنت مدير اللوحة وإعداداتها كلها بيدك.</p></div></header>
     <form class="create" id="create-form" autocomplete="on">
       <label>اسم اللوحة أو الدورة<input id="c-title" maxlength="120" required placeholder="مثال: دبلوم تصميم المواقع التعليمية"></label>
       <label>بريدك الإلكتروني — يصلك عليه رابط الإدارة<input id="c-email" type="email" dir="ltr" maxlength="190" required placeholder="name@example.com"></label>
@@ -50,15 +50,15 @@
   <!-- اللوحة -->
   <section id="board-view" hidden>
     <header class="hero">
-      <div><span class="eyebrow">INEXC TRAINING · حائط الأعمال</span><h1 id="b-title">…</h1><p class="lead" id="b-lead">كل متدرب يرفع عمله باسمه، ويُختم ملفه تلقائيًا بتوقيع التميز.</p></div>
+      <div><h1 id="b-title">…</h1><p class="lead" id="b-lead">معرض أعمال الدفعة: كل عمل يُعرض باسم صاحبه مختومًا بتوقيع التميز.</p></div>
       <div class="hero-actions">
         <button class="primary" id="enter">دخول باسمك</button>
-        <button id="upload-btn" hidden>ارفع عملك</button>
+        <button class="primary" id="upload-btn" hidden>ارفع عملك</button>
       </div>
     </header>
     <div class="counts"><span>المشاركات <b id="c-works">0</b></span><span>المتدربون <b id="c-people">0</b></span><span>الحالة <b id="c-state">—</b></span></div>
     <section class="admin" id="admin" hidden>
-      <h2>لوحة المدير <small>الإعدادات كلها بيدك — كل زر مفتاح تشغيل/إيقاف</small></h2>
+      <h2>لوحة المدير <small>الإعدادات بيدك</small></h2>
       <div class="chips" id="admin-chips"></div>
       <div class="admin-row"><span>نمط اللوحة:</span><div class="seg"><button id="a-single">دخول فردي</button><button id="a-groups">مجموعات</button><button id="a-both">كلاهما</button></div></div>
       <div class="admin-row" id="a-groups-row" hidden><span>المجموعات:</span><input id="a-groups-names" maxlength="400" placeholder="افصل بين الأسماء بفاصلة"><button id="a-groups-save">حفظ المجموعات</button></div>

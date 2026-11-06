@@ -64,7 +64,7 @@ function render(){
   const col=document.createElement('div');col.className='col';col.innerHTML=`<h2>${esc(c.name)} <small>${items.length} ${items.length===1?'عمل':'أعمال'}</small></h2><div class="cards"></div>`;
   const cards=col.querySelector('.cards');
   for(const it of items){const idx=state.items.push(it)-1;cards.append(cardEl(it,idx))}
-  if(b.settings.uploadsOpen&&!b.settings.closed){const add=document.createElement('button');add.type='button';add.className='add';add.innerHTML=`<span>＋</span>ارفع عملك`;add.addEventListener('click',()=>startUpload(c.index));cards.append(add)}
+  if(b.settings.uploadsOpen&&!b.settings.closed){const add=document.createElement('button');add.type='button';add.className='add';add.innerHTML=`<span>+</span>ارفع عملك`;add.addEventListener('click',()=>startUpload(c.index));cards.append(add)}
   else if(!items.length)cards.innerHTML='<p class="empty">لا أعمال بعد.</p>';
   board.append(col);
  }
