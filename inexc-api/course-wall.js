@@ -32,6 +32,9 @@ export function fileKind(name,mime=''){
  if(/^text\//.test(mime)||textExt.test(n))return 'text';
  return 'other';
 }
+export const modeOf=v=>['groups','both'].includes(v)?v:'single';
+// المجموعة: فردي دائمًا 0؛ مجموعات: فهرس صالح؛ كلاهما: -1 يعني دخولًا فرديًا بلا مجموعة
+export function normGroup(board,value,fallback=0){const g=Number(value);if(board.mode==='single')return 0;if(board.mode==='both'&&g===-1)return -1;if(Number.isInteger(g)&&g>=0&&g<board.groups.length)return g;return board.mode==='both'?-1:(Number.isInteger(fallback)&&fallback>=0&&fallback<board.groups.length?fallback:0)}
 export function publicSettings(settings){const s={...defaultSettings,...(settings||{})};const out={};for(const k of settingKeys)out[k]=!!s[k];return out}
 
 export async function setupCourseWall(pool){
@@ -40,6 +43,8 @@ export async function setupCourseWall(pool){
  await pool.query(`CREATE TABLE IF NOT EXISTS wall_items(id UUID PRIMARY KEY,board_id UUID NOT NULL REFERENCES wall_boards(id) ON DELETE CASCADE,member_id UUID REFERENCES wall_members(id) ON DELETE SET NULL,author_name TEXT NOT NULL,group_index INTEGER NOT NULL DEFAULT 0,title TEXT NOT NULL,file_name TEXT NOT NULL,mime TEXT NOT NULL DEFAULT '',size_bytes BIGINT NOT NULL,kind TEXT NOT NULL,stored_name TEXT NOT NULL,pages INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'processing',error TEXT NOT NULL DEFAULT '',approved BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
  await pool.query(`CREATE TABLE IF NOT EXISTS wall_comments(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),item_id UUID NOT NULL REFERENCES wall_items(id) ON DELETE CASCADE,member_id UUID REFERENCES wall_members(id) ON DELETE SET NULL,author_name TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',image_name TEXT NOT NULL DEFAULT '',created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
  await pool.query(`CREATE TABLE IF NOT EXISTS wall_reactions(item_id UUID NOT NULL REFERENCES wall_items(id) ON DELETE CASCADE,member_id UUID NOT NULL REFERENCES wall_members(id) ON DELETE CASCADE,kind TEXT NOT NULL CHECK(kind IN ('like','idea')),created_at TIMESTAMPTZ NOT NULL DEFAULT now(),PRIMARY KEY(item_id,member_id,kind))`);
+ await pool.query('ALTER TABLE wall_boards DROP CONSTRAINT IF EXISTS wall_boards_mode_check');
+ await pool.query("ALTER TABLE wall_boards ADD CONSTRAINT wall_boards_mode_check CHECK (mode IN ('single','groups','both'))");
  await pool.query('CREATE INDEX IF NOT EXISTS wall_items_board ON wall_items(board_id,created_at DESC)');
  await pool.query('CREATE INDEX IF NOT EXISTS wall_comments_item ON wall_comments(item_id,created_at)');
 }
@@ -96,8 +101,8 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
   limit('create:'+ipOf(req),10);
   const b=req.body||{},title=text(b.title,120,true),email=text(b.email,190,true).toLowerCase();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw fail('البريد الإلكتروني غير صحيح.');if(b.website)throw fail('تعذّر إنشاء اللوحة.');
-  const mode=b.mode==='groups'?'groups':'single';
-  const groups=Array.isArray(b.groups)&&b.groups.length?b.groups.slice(0,12).map(g=>text(g,60,true)):defaultGroups;
+  const mode=modeOf(b.mode);
+  const groups=Array.isArray(b.groups)&&b.groups.length?b.groups.slice(0,12).map(g=>text(g,60,true)):defaultGroups;if(mode!=='single'&&groups.length<2)throw fail('أضف مجموعتين على الأقل.');
   const key=crypto.randomBytes(32).toString('hex');let code,row;
   for(let i=0;i<5&&!row;i++){code=newCode();row=(await pool.query('INSERT INTO wall_boards(code,title,owner_email,owner_key_hash,mode,groups,settings) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(code) DO NOTHING RETURNING *',[code,title,email,hash(key),mode,JSON.stringify(groups),JSON.stringify(defaultSettings)])).rows[0]}
   if(!row)throw fail('تعذّر إنشاء اللوحة. حاول مجددًا.',500);
@@ -119,15 +124,15 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
  }));
  app.get('/api/wall/boards/:code',loadBoard,wrap(async(req,res)=>res.json(await boardView(req))));
  app.patch('/api/wall/boards/:code',loadBoard,ownerOnly,wrap(async(req,res)=>{
-  const b=req.body||{},cur=req.board;const title=b.title===undefined?cur.title:text(b.title,120,true);const mode=b.mode===undefined?cur.mode:(b.mode==='groups'?'groups':'single');
-  const groups=b.groups===undefined?cur.groups:(Array.isArray(b.groups)?b.groups.slice(0,12).map(g=>text(g,60,true)):cur.groups);if(mode==='groups'&&groups.length<2)throw fail('أضف مجموعتين على الأقل.');
+  const b=req.body||{},cur=req.board;const title=b.title===undefined?cur.title:text(b.title,120,true);const mode=b.mode===undefined?cur.mode:modeOf(b.mode);
+  const groups=b.groups===undefined?cur.groups:(Array.isArray(b.groups)?b.groups.slice(0,12).map(g=>text(g,60,true)):cur.groups);if(mode!=='single'&&groups.length<2)throw fail('أضف مجموعتين على الأقل.');
   const settings={...cur.settings};if(b.settings&&typeof b.settings==='object')for(const k of settingKeys)if(typeof b.settings[k]==='boolean')settings[k]=b.settings[k];
   req.board=(await pool.query('UPDATE wall_boards SET title=$2,mode=$3,groups=$4,settings=$5,updated_at=now() WHERE id=$1 RETURNING *',[cur.id,title,mode,JSON.stringify(groups),JSON.stringify(settings)])).rows[0];req.board.settings=publicSettings(req.board.settings);
   res.json(await boardView(req));
  }));
  app.post('/api/wall/boards/:code/join',loadBoard,wrap(async(req,res)=>{
   limit('join:'+ipOf(req),120);const b=req.board;if(b.settings.closed)throw fail('أغلق مدير اللوحة الدخول إليها.',409);
-  const name=text(req.body?.name,60,true);let group=Number(req.body?.group);if(!Number.isInteger(group)||group<0||group>=b.groups.length||b.mode==='single')group=0;
+  const name=text(req.body?.name,60,true);const group=normGroup(b,req.body?.group);
   const token=crypto.randomBytes(32).toString('hex');const m=(await pool.query('INSERT INTO wall_members(board_id,name,group_index,token_hash) VALUES($1,$2,$3,$4) RETURNING id,name,group_index',[b.id,name,group,hash(token)])).rows[0];
   res.status(201).json({token,me:{id:m.id,name:m.name,group:m.group_index}});
  }));
@@ -141,7 +146,7 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
    limit('upload:'+ipOf(req),120);
    const fileName=path.basename(Buffer.from(req.file.originalname,'latin1').toString('utf8')).replace(/[\x00-\x1f\x7f]/g,'').slice(0,200)||'file';
    const title=text(req.body?.title||'',120)||fileName.replace(/\.[a-z0-9]{1,5}$/i,'');
-   let group=Number(req.body?.group);if(!Number.isInteger(group)||group<0||group>=b.groups.length||b.mode==='single')group=req.member.group_index||0;
+   const group=normGroup(b,req.body?.group,req.member.group_index);
    const stats=(await pool.query('SELECT COALESCE(sum(size_bytes),0) AS bytes,count(*) AS n FROM wall_items WHERE board_id=$1',[b.id])).rows[0];if(Number(stats.bytes)+req.file.size>quotaBytes||Number(stats.n)>=maxItems)throw fail('امتلأت مساحة هذه اللوحة. تواصل مع مديرها.',409);
    const kind=fileKind(fileName,req.file.mimetype);
    const it=(await pool.query('INSERT INTO wall_items(id,board_id,member_id,author_name,group_index,title,file_name,mime,size_bytes,kind,stored_name,approved,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *',[id,b.id,req.member.id,req.member.name,group,title,fileName,req.file.mimetype||'',req.file.size,kind,'original.bin',!b.settings.requireApproval,['video','audio','other'].includes(kind)?'ready':'processing'])).rows[0];
