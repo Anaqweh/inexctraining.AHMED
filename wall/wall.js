@@ -28,15 +28,15 @@ async function api(path,{method='GET',body,form}={}){
 /* ——— إنشاء لوحة ——— */
 function initCreate(){
  $('create-view').hidden=false;document.title='إنشاء لوحة أعمال | INEXC Training';
- let mode='single';const seg=m=>{mode=m;$('c-single').setAttribute('aria-pressed',String(m==='single'));$('c-groups').setAttribute('aria-pressed',String(m==='groups'));$('c-groups-wrap').hidden=m!=='groups'};
- $('c-single').addEventListener('click',()=>seg('single'));$('c-groups').addEventListener('click',()=>seg('groups'));
+ let mode='single';const seg=m=>{mode=m;for(const k of ['single','groups','both'])$('c-'+k).setAttribute('aria-pressed',String(m===k));$('c-groups-wrap').hidden=m==='single'};
+ for(const k of ['single','groups','both'])$('c-'+k).addEventListener('click',()=>seg(k));
  $('create-form').addEventListener('submit',async e=>{
   e.preventDefault();const st=$('c-status');st.className='status';st.textContent='جارٍ إنشاء اللوحة…';$('c-go').disabled=true;
   try{
    const groups=$('c-groups-names').value.split(/[،,\n]/).map(s=>s.trim()).filter(Boolean);
-   const r=await api('/wall/boards',{method:'POST',body:{title:$('c-title').value.trim(),email:$('c-email').value.trim(),mode,groups:mode==='groups'&&groups.length>=2?groups:undefined,website:$('c-website').value}});
+   const r=await api('/wall/boards',{method:'POST',body:{title:$('c-title').value.trim(),email:$('c-email').value.trim(),mode,groups:mode!=='single'&&groups.length>=2?groups:undefined,website:$('c-website').value}});
    st.textContent='';const ok=$('c-ok');ok.hidden=false;
-   ok.innerHTML=`<h2>تم إنشاء اللوحة ✓</h2>${r.emailed?`<p>أرسلنا <b>رابط الإدارة</b> إلى <span dir="ltr">${esc($('c-email').value.trim())}</span>. افتحه من بريدك لتدخل كمدير وتضبط الإعدادات.</p>`:`<p>البريد غير مفعّل على الخادم حاليًا؛ هذا رابط الإدارة — احفظه ولا تشاركه:</p><p class="share"><code>${esc(r.adminUrl)}</code></p>`}<p>رابط المشاركة مع المتدربين:</p><div class="share"><code id="c-share">${esc(r.url)}</code><button type="button" id="c-copy">📋 نسخ</button></div><p style="margin-top:12px"><a href="${esc(r.url)}">افتح اللوحة الآن ←</a></p>`;
+   ok.innerHTML=`<h2>تم إنشاء اللوحة ✓</h2>${r.emailed?`<p>أرسلنا <b>رابط الإدارة</b> إلى <span dir="ltr">${esc($('c-email').value.trim())}</span>. افتحه من بريدك لتدخل كمدير وتضبط الإعدادات.</p>`:`<p>البريد غير مفعّل على الخادم حاليًا؛ هذا رابط الإدارة — احفظه ولا تشاركه:</p><p class="share"><code>${esc(r.adminUrl)}</code></p>`}<p>رابط المشاركة مع المتدربين:</p><div class="share"><code id="c-share">${esc(r.url)}</code><button type="button" id="c-copy">نسخ</button></div><p style="margin-top:12px"><a href="${esc(r.url)}">افتح اللوحة الآن ←</a></p>`;
    $('c-copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(r.url);say('🔗 نُسخ الرابط')}catch{say(r.url,5000)}});
    ok.scrollIntoView({behavior:'smooth',block:'center'});
   }catch(err){st.className='status err';st.textContent=err.message}finally{$('c-go').disabled=false}
@@ -58,9 +58,9 @@ function render(){
  $('b-status').className='status';$('b-status').textContent=b.settings.closed?'أغلق مدير اللوحة الدخول إليها حاليًا.':(!state.me?'ادخل باسمك لتتمكن من رفع عملك والتعليق على الأعمال.':'');
  renderAdmin();
  const board=$('board');board.replaceChildren();board.classList.toggle('single',b.mode==='single');state.items=[];
- const cols=b.mode==='groups'?b.groups.map((g,i)=>({name:g,index:i})):[{name:'حائط الدفعة',index:0}];
+ const cols=b.mode==='single'?[{name:'حائط الدفعة',index:0}]:[...(b.mode==='both'?[{name:'أعمال فردية',index:-1}]:[]),...b.groups.map((g,i)=>({name:g,index:i}))];
  for(const c of cols){
-  const items=b.items.filter(it=>b.mode!=='groups'||it.group===c.index);
+  const items=b.items.filter(it=>b.mode==='single'||it.group===c.index);
   const col=document.createElement('div');col.className='col';col.innerHTML=`<h2>${esc(c.name)} <small>${items.length} ${items.length===1?'عمل':'أعمال'}</small></h2><div class="cards"></div>`;
   const cards=col.querySelector('.cards');
   for(const it of items){const idx=state.items.push(it)-1;cards.append(cardEl(it,idx))}
@@ -85,14 +85,14 @@ function renderAdmin(){
  const b=state.board,a=$('admin');a.hidden=!b.isOwner;if(!b.isOwner)return;
  const chips=$('admin-chips');chips.replaceChildren();
  for(const [k,label] of Object.entries(settingLabels)){const c=document.createElement('button');c.type='button';c.className='chip';c.textContent=(b.settings[k]?'● ':'○ ')+label;c.setAttribute('aria-pressed',String(!!b.settings[k]));c.addEventListener('click',()=>patch({settings:{[k]:!b.settings[k]}}));chips.append(c)}
- $('a-single').setAttribute('aria-pressed',String(b.mode==='single'));$('a-groups').setAttribute('aria-pressed',String(b.mode==='groups'));
- $('a-groups-row').hidden=b.mode!=='groups';if(document.activeElement!==$('a-groups-names'))$('a-groups-names').value=b.groups.join('، ');
+ for(const k of ['single','groups','both'])$('a-'+k).setAttribute('aria-pressed',String(b.mode===k));
+ $('a-groups-row').hidden=b.mode==='single';if(document.activeElement!==$('a-groups-names'))$('a-groups-names').value=b.groups.join('، ');
  if(document.activeElement!==$('a-title'))$('a-title').value=b.title;
  $('a-qr').src=`${API}/wall/boards/${code}/qr`;$('a-link').textContent=b.url;$('a-email').textContent=b.ownerEmail||'';
 }
 function initAdmin(){
  $('a-single').addEventListener('click',()=>patch({mode:'single'}));
- $('a-groups').addEventListener('click',()=>{const groups=$('a-groups-names').value.split(/[،,\n]/).map(s=>s.trim()).filter(Boolean);patch({mode:'groups',groups:groups.length>=2?groups:undefined})});
+ for(const k of ['groups','both'])$('a-'+k).addEventListener('click',()=>{const groups=$('a-groups-names').value.split(/[،,\n]/).map(s=>s.trim()).filter(Boolean);patch({mode:k,groups:groups.length>=2?groups:undefined})});
  $('a-groups-save').addEventListener('click',()=>{const groups=$('a-groups-names').value.split(/[،,\n]/).map(s=>s.trim()).filter(Boolean);if(groups.length<2)return say('أضف مجموعتين على الأقل');patch({groups})});
  $('a-title-save').addEventListener('click',()=>patch({title:$('a-title').value.trim()}));
  $('a-copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(state.board.url);say('🔗 نُسخ رابط المتدربين')}catch{say(state.board.url,5000)}});
@@ -100,11 +100,15 @@ function initAdmin(){
 }
 
 /* ——— الدخول والخروج ——— */
+function groupPicker(container,b,selected,onPick){
+ const opts=[...(b.mode==='both'?[{name:'فردي — بلا مجموعة',index:-1}]:[]),...b.groups.map((name,i)=>({name,index:i}))];
+ for(const o of opts){const btn=document.createElement('button');btn.type='button';btn.textContent=o.name;btn.dataset.index=o.index;btn.setAttribute('aria-pressed',String(o.index===selected));btn.addEventListener('click',()=>{onPick(o.index);container.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(Number(x.dataset.index)===o.index)))});container.append(btn)}
+}
 const jd=$('join-dialog');let joinGroup=0;
 function openJoin(after){
  const b=state.board;state.afterJoin=after||null;$('join-sub').textContent=b.title;
- const wrap=$('join-groups-wrap');wrap.hidden=b.mode!=='groups';const g=$('join-groups');g.replaceChildren();joinGroup=0;
- if(b.mode==='groups')b.groups.forEach((name,i)=>{const btn=document.createElement('button');btn.type='button';btn.textContent=name;btn.setAttribute('aria-pressed',String(i===0));btn.addEventListener('click',()=>{joinGroup=i;g.querySelectorAll('button').forEach((x,xi)=>x.setAttribute('aria-pressed',String(xi===i)))});g.append(btn)});
+ const wrap=$('join-groups-wrap');wrap.hidden=b.mode==='single';const g=$('join-groups');g.replaceChildren();joinGroup=b.mode==='both'?-1:0;
+ if(b.mode!=='single')groupPicker(g,b,joinGroup,v=>joinGroup=v);
  jd.showModal();setTimeout(()=>$('join-name').focus(),50);
 }
 $('join-form').addEventListener('submit',async e=>{
@@ -121,9 +125,9 @@ const ud=$('up-dialog'),upFile=$('up-file');let upGroup=0,upBusy=false;
 function startUpload(gi){
  if(!state.me)return openJoin(()=>startUpload(gi));
  const b=state.board;if(!b.settings.uploadsOpen||b.settings.closed)return say('الرفع متوقف حاليًا');
- upGroup=Number.isInteger(gi)?gi:(state.me.group||0);$('up-as').textContent=`سيظهر العمل باسم: ${state.me.name}`;
- const wrap=$('up-groups-wrap');wrap.hidden=b.mode!=='groups';const g=$('up-groups');g.replaceChildren();
- if(b.mode==='groups')b.groups.forEach((name,i)=>{const btn=document.createElement('button');btn.type='button';btn.textContent=name;btn.setAttribute('aria-pressed',String(i===upGroup));btn.addEventListener('click',()=>{upGroup=i;g.querySelectorAll('button').forEach((x,xi)=>x.setAttribute('aria-pressed',String(xi===i)))});g.append(btn)});
+ upGroup=Number.isInteger(gi)?gi:(Number.isInteger(state.me.group)?state.me.group:0);$('up-as').textContent=`سيظهر العمل باسم: ${state.me.name}`;
+ const wrap=$('up-groups-wrap');wrap.hidden=b.mode==='single';const g=$('up-groups');g.replaceChildren();
+ if(b.mode!=='single')groupPicker(g,b,upGroup,v=>upGroup=v);
  upFile.value='';$('up-title-in').value='';$('up-preview').hidden=true;$('up-go').disabled=true;$('up-bar').hidden=true;$('up-status').textContent='';ud.showModal();
 }
 $('upload-btn').addEventListener('click',()=>startUpload());
@@ -150,15 +154,15 @@ async function paintViewer(){
  const it=current();if(!it)return;vItem=it;clearTimeout(vPoll);
  const c=colorOf(it.author);$('v-owner').textContent=it.author;$('v-title').textContent=it.title;$('v-title').dir=/^[؀-ۿ]/.test(it.title)?'rtl':'ltr';$('v-by').textContent=`${metaOf(it)} · ${new Date(it.createdAt).toLocaleDateString('ar-AE',{day:'numeric',month:'long'})}`;
  $('v-nav').hidden=state.items.length<2;$('v-count').textContent=`${vIdx+1} / ${state.items.length}`;
- const own=state.board.isOwner;$('v-del').hidden=!(own||it.mine);$('v-del').textContent='🗑️ حذف';$('v-approve').hidden=!(own&&!it.approved);
+ const own=state.board.isOwner;$('v-del').hidden=!(own||it.mine);$('v-del').textContent='حذف';$('v-approve').hidden=!(own&&!it.approved);
  $('v-dl').hidden=!((state.board.settings.allowDownload||own||it.mine)&&['office','other','pdf','text','image'].includes(it.kind));$('v-dl').onclick=()=>window.open(API+it.fileUrl,'_blank','noopener');
  const stage=$('v-stage');const fileUrl=API+it.fileUrl;
  if(it.status==='processing'){stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">⏳</div><b>جارٍ تجهيز صفحات هذا العمل…</b><small>يُحوَّل الملف على الخادم إلى صفحات مختومة بتوقيع التميز، وتظهر هنا تلقائيًا خلال لحظات.</small></div>`;vPoll=setTimeout(async()=>{try{const r=await api('/wall/items/'+it.id);Object.assign(it,r.item);if(vItem===it)paintViewer()}catch{}},3000)}
- else if(it.status==='failed'){stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">⚠️</div><b>تعذّر تحويل هذا الملف</b><small>${esc(it.error||'')} ${own?'<br>يمكنك إعادة المحاولة من الزر أدناه.':''}</small>${own?'<p><button type="button" id="v-retry">🔁 إعادة المحاولة</button></p>':''}<p><a href="${fileUrl}" target="_blank" rel="noopener">فتح الملف الأصلي</a></p></div>`;$('v-retry')?.addEventListener('click',async()=>{try{await api(`/wall/items/${it.id}/retry`,{method:'POST',body:{}});it.status='processing';paintViewer()}catch(err){say(err.message)}})}
+ else if(it.status==='failed'){stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">⚠️</div><b>تعذّر تحويل هذا الملف</b><small>${esc(it.error||'')} ${own?'<br>يمكنك إعادة المحاولة من الزر أدناه.':''}</small>${own?'<p><button type="button" id="v-retry">إعادة المحاولة</button></p>':''}<p><a href="${fileUrl}" target="_blank" rel="noopener">فتح الملف الأصلي</a></p></div>`;$('v-retry')?.addEventListener('click',async()=>{try{await api(`/wall/items/${it.id}/retry`,{method:'POST',body:{}});it.status='processing';paintViewer()}catch(err){say(err.message)}})}
  else if(it.pages>0){stage.innerHTML=`<div class="pg-box"><img class="pg" id="v-page" alt="${esc(it.title)} — صفحة ${page}" src="${API}${it.pageUrl}${page}">${it.pages>1?`<div class="pg-nav"><button type="button" data-pg="prev" aria-label="الصفحة السابقة">›</button><span>${page} / ${it.pages}</span><button type="button" data-pg="next" aria-label="الصفحة التالية">‹</button></div>`:''}</div>`}
  else if(it.kind==='video')stage.innerHTML=`<video src="${fileUrl}" controls playsinline></video>`;
  else if(it.kind==='audio')stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">🎧</div><b><bdi>${esc(it.title)}</bdi></b><audio src="${fileUrl}" controls style="margin-top:12px;width:100%"></audio></div>`;
- else stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">${icons[it.kind]||icons.other}</div><b><bdi>${esc(it.fileName)}</bdi></b><small>${kindLabel[it.kind]} · ${(it.size/1024/1024).toFixed(2)} MB — لا يمكن عرض هذا النوع كصفحات</small><p><a href="${fileUrl}" target="_blank" rel="noopener">⬇️ تنزيل الملف</a></p></div>`;
+ else stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">${icons[it.kind]||icons.other}</div><b><bdi>${esc(it.fileName)}</bdi></b><small>${kindLabel[it.kind]} · ${(it.size/1024/1024).toFixed(2)} MB — لا يمكن عرض هذا النوع كصفحات</small><p><a href="${fileUrl}" target="_blank" rel="noopener">تنزيل الملف</a></p></div>`;
  paintSocial(it);loadComments(it);
 }
 $('v-stage').addEventListener('click',e=>{const b=e.target.closest('[data-pg]');if(!b)return;const it=current();page=Math.min(Math.max(1,page+(b.dataset.pg==='next'?1:-1)),it.pages);paintViewer()});
@@ -169,7 +173,7 @@ $('v-next').addEventListener('click',()=>{vIdx=(vIdx+1)%state.items.length;page=
 vw.addEventListener('keydown',e=>{if(e.target.closest('input,textarea'))return;const it=current();if(!it)return;if(e.key==='ArrowLeft'){if(it.pages>1&&page<it.pages){page++;paintViewer()}else $('v-next').click()}if(e.key==='ArrowRight'){if(it.pages>1&&page>1){page--;paintViewer()}else $('v-prev').click()}});
 $('v-fs').addEventListener('click',e=>{const on=vw.classList.toggle('fs');try{if(on&&!document.fullscreenElement)vw.requestFullscreen?.().catch(()=>{});if(!on&&document.fullscreenElement)document.exitFullscreen?.().catch(()=>{})}catch{}e.currentTarget.textContent=on?'⤡ تصغير العرض':'⛶ شاشة كاملة'});
 $('v-link').addEventListener('click',async()=>{const link=`${location.origin}/wall/?b=${code}&w=${current().id}`;try{await navigator.clipboard.writeText(link);say('🔗 نُسخ رابط العمل')}catch{say(link,6000)}});
-$('v-del').addEventListener('click',async e=>{const it=current();if(e.currentTarget.dataset.arm!==it.id){e.currentTarget.dataset.arm=it.id;e.currentTarget.textContent='تأكيد الحذف؟';setTimeout(()=>{if($('v-del').dataset.arm===it.id){$('v-del').dataset.arm='';$('v-del').textContent='🗑️ حذف'}},4000);return}try{await api('/wall/items/'+it.id,{method:'DELETE'});vw.close();say('حُذف العمل');load()}catch(err){say(err.message,4000)}});
+$('v-del').addEventListener('click',async e=>{const it=current();if(e.currentTarget.dataset.arm!==it.id){e.currentTarget.dataset.arm=it.id;e.currentTarget.textContent='تأكيد الحذف؟';setTimeout(()=>{if($('v-del').dataset.arm===it.id){$('v-del').dataset.arm='';$('v-del').textContent='حذف'}},4000);return}try{await api('/wall/items/'+it.id,{method:'DELETE'});vw.close();say('حُذف العمل');load()}catch(err){say(err.message,4000)}});
 $('v-approve').addEventListener('click',async()=>{const it=current();try{await api(`/wall/items/${it.id}/approve`,{method:'POST',body:{approved:true}});it.approved=true;say('✓ اعتُمد العمل وصار ظاهرًا للجميع');paintViewer();load()}catch(err){say(err.message,4000)}});
 
 /* ——— التفاعل والتعليقات ——— */

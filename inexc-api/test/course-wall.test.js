@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {PGlite} from '@electric-sql/pglite';
-import {setupCourseWall,installCourseWall,fileKind,publicSettings} from '../course-wall.js';
+import {setupCourseWall,installCourseWall,fileKind,publicSettings,normGroup} from '../course-wall.js';
 
 async function harness(){
  const db=new PGlite(),uploadDir=await fs.mkdtemp(path.join(os.tmpdir(),'inexc-wall-'));
@@ -28,6 +28,11 @@ test('file kinds and settings normalisation',()=>{
  assert.deepEqual(publicSettings({comments:false,extra:1}),{uploadsOpen:true,comments:false,reactions:true,requireApproval:false,stamp:true,closed:false,allowDownload:true});
 });
 
+test('mode «both» lets a trainee enter alone (-1) or in a group',()=>{
+ const g=['أ','ب','ج'];
+ assert.equal(normGroup({mode:'single',groups:g},2),0);assert.equal(normGroup({mode:'groups',groups:g},-1),0);assert.equal(normGroup({mode:'groups',groups:g},2),2);assert.equal(normGroup({mode:'groups',groups:g},9,1),1);
+ assert.equal(normGroup({mode:'both',groups:g},-1),-1);assert.equal(normGroup({mode:'both',groups:g},1),1);assert.equal(normGroup({mode:'both',groups:g},'x'),-1);
+});
 test('a board is created by anyone, its admin key arrives by email only, trainees join by name',async t=>{
  const h=await harness();t.after(()=>h.close());const {api,sent}=h;
  const created=await api('/api/wall/boards','POST',{title:'دبلوم التصميم',email:'Owner@Example.com'});
@@ -38,9 +43,12 @@ test('a board is created by anyone, its admin key arrives by email only, trainee
  const pub=await api('/api/wall/boards/'+code);assert.equal(pub.status,200);assert.equal(pub.data.isOwner,false);assert.equal(pub.data.ownerEmail,undefined);assert.equal(pub.data.mode,'single');
  const asOwner=await api('/api/wall/boards/'+code,'GET',undefined,owner);assert.equal(asOwner.data.isOwner,true);assert.equal(asOwner.data.ownerEmail,'owner@example.com');
  assert.equal((await api('/api/wall/boards/'+code,'PATCH',{title:'x'})).status,403);
+ const both=await api('/api/wall/boards/'+code,'PATCH',{mode:'both',groups:['أ','ب','ج']},owner);assert.equal(both.data.mode,'both');
+ const solo=await api('/api/wall/boards/'+code+'/join','POST',{name:'منفرد',group:-1});assert.equal(solo.data.me.group,-1);
+ assert.equal((await api('/api/wall/boards/'+code+'/join','POST',{name:'ضمن',group:2})).data.me.group,2);
  const patched=await api('/api/wall/boards/'+code,'PATCH',{mode:'groups',groups:['أ','ب'],settings:{comments:false,nope:true}},owner);assert.equal(patched.status,200);assert.equal(patched.data.mode,'groups');assert.deepEqual(patched.data.groups,['أ','ب']);assert.equal(patched.data.settings.comments,false);
  const joined=await api('/api/wall/boards/'+code+'/join','POST',{name:'سارة',group:1});assert.equal(joined.status,201);assert.equal(joined.data.me.group,1);const member={'X-Wall-Member':joined.data.token};
- const me=await api('/api/wall/boards/'+code,'GET',undefined,member);assert.deepEqual(me.data.me,{id:joined.data.me.id,name:'سارة',group:1});assert.equal(me.data.members,1);
+ const me=await api('/api/wall/boards/'+code,'GET',undefined,member);assert.deepEqual(me.data.me,{id:joined.data.me.id,name:'سارة',group:1});assert.equal(me.data.members,3);
  // رفع صورة → تُحوَّل إلى صفحة مختومة
  const up=await api('/api/wall/boards/'+code+'/items','POST',form({title:'لوحتي',group:'1'},{field:'file',data:png1x1,type:'image/png',name:'لوحة.png'}),member);
  assert.equal(up.status,201);assert.equal(up.data.item.kind,'image');assert.equal(up.data.item.status,'processing');assert.equal(up.data.item.author,'سارة');assert.equal(up.data.item.group,1);

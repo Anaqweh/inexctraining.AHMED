@@ -8,15 +8,15 @@
 <title>حائط الأعمال | INEXC Training</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&display=swap">
-<link rel="stylesheet" href="/wall/wall.css?v=20261106-1">
+<link rel="stylesheet" href="/wall/wall.css?v=20261107-1">
 <script defer src="/inexc-registration-config.js"></script>
-<script defer src="/wall/wall.js?v=20261106-2"></script>
+<script defer src="/wall/wall.js?v=20261107-1"></script>
 </head>
 <body>
 <div class="wrap">
   <div class="brandbar">
     <a class="logo" href="/"><img src="/assets/inexc-logo-official-source.png" alt="INEXC Training"><span>التميز الابتكاري <small>INEXC TRAINING · حائط الأعمال</small></span></a>
-    <div class="who-bar" id="who-bar" hidden><span>أنت: <b id="who-name"></b></span><button id="logout" class="ghost">خروج ⎋</button></div>
+    <div class="who-bar" id="who-bar" hidden><span>أنت: <b id="who-name"></b></span><button id="logout" class="ghost">خروج</button></div>
   </div>
 
   <!-- إنشاء لوحة جديدة -->
@@ -26,7 +26,8 @@
       <label>اسم اللوحة أو الدورة<input id="c-title" maxlength="120" required placeholder="مثال: دبلوم تصميم المواقع التعليمية"></label>
       <label>بريدك الإلكتروني — يصلك عليه رابط الإدارة<input id="c-email" type="email" dir="ltr" maxlength="190" required placeholder="name@example.com"></label>
       <label>نمط اللوحة</label>
-      <div class="seg" role="group" aria-label="نمط اللوحة"><button type="button" id="c-single" aria-pressed="true">👤 دخول فردي</button><button type="button" id="c-groups" aria-pressed="false">👥 مجموعات</button></div>
+      <div class="seg" role="group" aria-label="نمط اللوحة"><button type="button" id="c-single" aria-pressed="true">دخول فردي</button><button type="button" id="c-groups" aria-pressed="false">مجموعات</button><button type="button" id="c-both" aria-pressed="false">كلاهما</button></div>
+      <p class="hint" style="margin:-6px 0 14px">«كلاهما»: يختار كل متدرب عند دخوله إمّا الدخول الفردي أو الانضمام إلى مجموعة.</p>
       <label id="c-groups-wrap" hidden>أسماء المجموعات (افصل بينها بفاصلة)<input id="c-groups-names" maxlength="400" placeholder="المجموعة الأولى، المجموعة الثانية، المجموعة الثالثة"></label>
       <div class="honey" aria-hidden="true"><label>الموقع<input id="c-website" tabindex="-1" autocomplete="off"></label></div>
       <button class="primary" id="c-go" type="submit">إنشاء اللوحة وإرسال رابط الإدارة ←</button>
@@ -41,30 +42,29 @@
     <header class="hero">
       <div><span class="eyebrow">INEXC TRAINING · حائط الأعمال</span><h1 id="b-title">…</h1><p class="lead" id="b-lead">كل متدرب يرفع عمله باسمه، ويُختم ملفه تلقائيًا بتوقيع التميز.</p></div>
       <div class="hero-actions">
-        <div class="seg" id="mode-seg" role="group" aria-label="نمط الحائط" hidden><button id="seg-single" aria-pressed="true">👤 دخول فردي</button><button id="seg-groups" aria-pressed="false">👥 مجموعات</button></div>
-        <button class="primary" id="enter">👋 دخول باسمك</button>
-        <button id="upload-btn" hidden>⬆️ ارفع عملك</button>
+        <button class="primary" id="enter">دخول باسمك</button>
+        <button id="upload-btn" hidden>ارفع عملك</button>
       </div>
     </header>
     <div class="counts"><span>المشاركات <b id="c-works">0</b></span><span>المتدربون <b id="c-people">0</b></span><span>الحالة <b id="c-state">—</b></span></div>
     <section class="admin" id="admin" hidden>
-      <h2>🛠️ لوحة المدير <small>الإعدادات كلها بيدك — كل زر مفتاح تشغيل/إيقاف</small></h2>
+      <h2>لوحة المدير <small>الإعدادات كلها بيدك — كل زر مفتاح تشغيل/إيقاف</small></h2>
       <div class="chips" id="admin-chips"></div>
-      <div class="admin-row"><span>نمط اللوحة:</span><div class="seg"><button id="a-single">👤 دخول فردي</button><button id="a-groups">👥 مجموعات</button></div></div>
+      <div class="admin-row"><span>نمط اللوحة:</span><div class="seg"><button id="a-single">دخول فردي</button><button id="a-groups">مجموعات</button><button id="a-both">كلاهما</button></div></div>
       <div class="admin-row" id="a-groups-row" hidden><span>المجموعات:</span><input id="a-groups-names" maxlength="400" placeholder="افصل بين الأسماء بفاصلة"><button id="a-groups-save">حفظ المجموعات</button></div>
       <div class="admin-row"><span>العنوان:</span><input id="a-title" maxlength="120"><button id="a-title-save">حفظ العنوان</button></div>
-      <div class="admin-row qr"><img id="a-qr" alt="رمز QR للوحة"><div><div class="share"><code id="a-link"></code><button id="a-copy">📋 نسخ رابط المتدربين</button></div><p class="hint" style="color:#9db4cf;margin-top:8px">رابط الإدارة الذي وصلك بالبريد يبقى سريًا؛ هذا رابط المشاركة فقط. بريد المدير: <span id="a-email" dir="ltr"></span></p></div></div>
+      <div class="admin-row qr"><img id="a-qr" alt="رمز QR للوحة"><div><div class="share"><code id="a-link"></code><button id="a-copy">نسخ رابط المتدربين</button></div><p class="hint" style="margin-top:8px">رابط الإدارة الذي وصلك بالبريد يبقى سريًا؛ هذا رابط المشاركة فقط. بريد المدير: <span id="a-email" dir="ltr"></span></p></div></div>
     </section>
     <p class="status" id="b-status" role="status"></p>
     <div class="board single" id="board"></div>
-    <p class="hint" style="margin-top:18px;color:#7a92ab">فقدت رابط الإدارة؟ <a href="#" id="recover">أرسل رابطًا جديدًا إلى بريد مدير اللوحة</a></p>
+    <p class="hint" style="margin-top:18px">فقدت رابط الإدارة؟ <a href="#" id="recover">أرسل رابطًا جديدًا إلى بريد مدير اللوحة</a></p>
   </section>
 </div>
 
 <!-- دخول المتدرب -->
 <dialog id="join-dialog" aria-labelledby="join-title">
   <form class="join" method="dialog" id="join-form">
-    <h3 id="join-title">أهلًا بك 👋</h3><p class="sub" id="join-sub"></p>
+    <h3 id="join-title">أهلًا بك</h3><p class="sub" id="join-sub"></p>
     <label>اسمك كما تحب أن يظهر على الحائط<input id="join-name" maxlength="60" autocomplete="name" required placeholder="مثال: سارة الهاشمي"></label>
     <div id="join-groups-wrap" hidden><p class="hint" style="text-align:right;margin-bottom:8px">اختر مجموعتك</p><div class="join-groups" id="join-groups"></div></div>
     <button class="primary join-go" id="join-go" type="submit">ادخل إلى الحائط ←</button>
@@ -91,7 +91,7 @@
   <div class="v-head">
     <button id="v-close">✕ إغلاق</button>
     <b id="v-owner" class="v-owner"></b>
-    <div class="v-actions"><button id="v-fs">⛶ شاشة كاملة</button><button id="v-link">🔗 نسخ رابط العمل</button><button id="v-dl" hidden>⬇️ الملف الأصلي</button><button id="v-approve" hidden>✓ اعتماد الظهور</button><button id="v-del" class="danger" hidden>🗑️ حذف</button></div>
+    <div class="v-actions"><button id="v-fs">⛶ شاشة كاملة</button><button id="v-link">نسخ رابط العمل</button><button id="v-dl" hidden>الملف الأصلي</button><button id="v-approve" hidden>✓ اعتماد الظهور</button><button id="v-del" class="danger" hidden>حذف</button></div>
   </div>
   <div class="v-stage" id="v-stage"></div>
   <div class="v-social" id="v-social">
