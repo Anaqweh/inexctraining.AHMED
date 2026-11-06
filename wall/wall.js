@@ -74,7 +74,7 @@ function cardEl(it,idx){
  const el=document.createElement('article');el.className='card'+(it.mine?' mine':'');el.style.setProperty('--pc',colorOf(it.author));el.tabIndex=0;
  const thumb=it.status==='ready'&&it.pages>0?`<img loading="lazy" alt="" src="${API}${it.pageUrl}1">`:`<span class="ico">${icons[it.kind]||icons.other}</span><span class="fname"><bdi>${esc(it.fileName)}</bdi></span>`;
  const badge=it.status==='processing'?'<span class="badge warn">⏳ جارٍ تجهيز الصفحات…</span>':it.status==='failed'?'<span class="badge bad">تعذّر تحويل الملف</span>':!it.approved?'<span class="badge warn">بانتظار اعتماد المدير</span>':'';
- el.innerHTML=`<div class="thumb">${thumb}</div>${badge}<div class="meta"><b>${esc(it.author)}</b><span class="ttl"><bdi>${esc(it.title)}</bdi></span><small>${metaOf(it)} · 👍 ${it.likes} · 💬 ${it.comments}</small></div>`;
+ el.innerHTML=`<div class="thumb">${thumb}</div>${badge||(it.mine?'<span class="badge me">عملك</span>':'')}<div class="meta"><b>${esc(it.author)}</b><span class="ttl"><bdi>${esc(it.title)}</bdi></span><small><span>${metaOf(it)}</span><span>👍 ${it.likes} &nbsp; 💬 ${it.comments}</span></small></div>`;
  el.addEventListener('click',()=>openViewer(idx));el.addEventListener('keydown',e=>{if(e.key==='Enter')openViewer(idx)});return el;
 }
 const metaOf=it=>it.pages>1?`${it.pages} صفحة`:it.pages===1?'صفحة واحدة':kindLabel[it.kind]||'ملف';
