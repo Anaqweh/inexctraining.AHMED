@@ -18,11 +18,12 @@ const newCode=()=>crypto.randomBytes(6).toString('base64url').toLowerCase().repl
 const defaultGroups=['المجموعة الأولى','المجموعة الثانية','المجموعة الثالثة'];
 const emailPattern=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const lockPassed=b=>!!(b.lock_at&&new Date(b.lock_at)<=new Date());
-const defaultSettings={uploadsOpen:true,comments:true,reactions:true,requireApproval:false,stamp:true,closed:false,allowDownload:true};
+const DEFAULT_STAMP='شركة التميز الابتكاري';
+const defaultSettings={uploadsOpen:true,comments:true,reactions:true,requireApproval:false,stamp:true,stampCompany:true,closed:false,allowDownload:true};
 const settingKeys=Object.keys(defaultSettings);
 const scriptPath=fileURLToPath(new URL('./wall-render.py',import.meta.url));
 const siteUrl='https://www.inexctraining.com';
-const STAMP_VERSION=2; // يرتفع عند تغيير شكل الختم فتُعاد معالجة الأعمال القديمة تلقائيًا
+const STAMP_VERSION=3; // يرتفع عند تغيير شكل الختم فتُعاد معالجة الأعمال القديمة تلقائيًا
 const officeExt=/\.(docx?|pptx?|xlsx?|odt|odp|ods|rtf|csv)$/i;
 const textExt=/\.(txt|md|json|html?|css|js|xml|log)$/i;
 export function fileKind(name,mime=''){
@@ -49,6 +50,7 @@ export async function setupCourseWall(pool){
  await pool.query('ALTER TABLE wall_items ADD COLUMN IF NOT EXISTS stamp_version INTEGER NOT NULL DEFAULT 0');
  await pool.query("ALTER TABLE wall_members ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''");
  await pool.query('ALTER TABLE wall_boards ADD COLUMN IF NOT EXISTS lock_at TIMESTAMPTZ');
+ await pool.query(`ALTER TABLE wall_boards ADD COLUMN IF NOT EXISTS stamp_text TEXT NOT NULL DEFAULT 'شركة التميز الابتكاري'`);
  await pool.query('ALTER TABLE wall_comments ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES wall_comments(id) ON DELETE CASCADE');
  await pool.query(`CREATE TABLE IF NOT EXISTS wall_comment_reactions(comment_id UUID NOT NULL REFERENCES wall_comments(id) ON DELETE CASCADE,member_id UUID NOT NULL REFERENCES wall_members(id) ON DELETE CASCADE,kind TEXT NOT NULL CHECK(kind IN ('like','logical','creative')),created_at TIMESTAMPTZ NOT NULL DEFAULT now(),PRIMARY KEY(comment_id,member_id,kind))`);
  await pool.query('ALTER TABLE wall_boards DROP CONSTRAINT IF EXISTS wall_boards_mode_check');
@@ -89,10 +91,10 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
  // ——— طابور التحويل ———
  let running=0;const queue=[];
  async function processItem(id){
-  const it=(await pool.query('SELECT i.*,b.settings,b.title AS board_title FROM wall_items i JOIN wall_boards b ON b.id=i.board_id WHERE i.id=$1',[id])).rows[0];if(!it)return;
+  const it=(await pool.query('SELECT i.*,b.settings,b.stamp_text,b.title AS board_title FROM wall_items i JOIN wall_boards b ON b.id=i.board_id WHERE i.id=$1',[id])).rows[0];if(!it)return;
   const settings=publicSettings(it.settings);
   try{
-   const pages=await render(path.join(itemDir(id),it.stored_name),itemDir(id),it.kind,settings.stamp?{name:it.author_name,board:it.board_title,company:'شركة التميز الابتكاري',brand:'INEXC TRAINING · inexctraining.com'}:null,it.file_name);
+   const pages=await render(path.join(itemDir(id),it.stored_name),itemDir(id),it.kind,settings.stamp?{name:it.author_name,board:it.board_title,company:settings.stampCompany?(it.stamp_text||DEFAULT_STAMP):'',brand:'INEXC TRAINING · inexctraining.com'}:null,it.file_name);
    await pool.query("UPDATE wall_items SET status='ready',pages=$2,error='',stamp_version=$3 WHERE id=$1",[id,pages,STAMP_VERSION]);
   }catch(e){await pool.query("UPDATE wall_items SET status='failed',error=$2 WHERE id=$1",[id,String(e.message||e).slice(0,300)])}
  }
@@ -102,7 +104,7 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
 
  const itemView=(req,it)=>({id:it.id,title:it.title,fileName:it.file_name,kind:it.kind,mime:it.mime,size:Number(it.size_bytes),pages:it.pages,status:it.status,approved:it.approved,author:it.author_name,group:it.group_index,createdAt:it.created_at,likes:Number(it.likes||0),ideas:Number(it.ideas||0),comments:Number(it.comment_count||0),mine:!!(req.member&&req.member.id===it.member_id),myLike:!!it.my_like,myIdea:!!it.my_idea,fileUrl:`/wall/items/${it.id}/file`,pageUrl:`/wall/items/${it.id}/pages/`,stampedUrl:it.pages>0?`/wall/items/${it.id}/stamped.pdf`:null});
  const listItems=async(req)=>{const mid=req.member?.id||null;const rows=(await pool.query(`SELECT i.*,(SELECT count(*) FROM wall_reactions r WHERE r.item_id=i.id AND r.kind='like') AS likes,(SELECT count(*) FROM wall_reactions r WHERE r.item_id=i.id AND r.kind='idea') AS ideas,(SELECT count(*) FROM wall_comments c WHERE c.item_id=i.id) AS comment_count,EXISTS(SELECT 1 FROM wall_reactions r WHERE r.item_id=i.id AND r.kind='like' AND r.member_id=$2) AS my_like,EXISTS(SELECT 1 FROM wall_reactions r WHERE r.item_id=i.id AND r.kind='idea' AND r.member_id=$2) AS my_idea FROM wall_items i WHERE i.board_id=$1 ORDER BY i.created_at DESC LIMIT $3`,[req.board.id,mid,maxItems])).rows;return rows.filter(it=>canSee(req,it)).map(it=>itemView(req,it))};
- const boardView=async req=>{const b=req.board;const members=(await pool.query('SELECT count(*) AS n FROM wall_members WHERE board_id=$1',[b.id])).rows[0];return {code:b.code,title:b.title,mode:b.mode,groups:b.groups,settings:b.settings,createdAt:b.created_at,lockAt:b.lock_at,url:boardUrl(b.code),members:Number(members.n),isOwner:req.isOwner,me:req.member?{id:req.member.id,name:req.member.name,group:req.member.group_index}:null,ownerEmail:req.isOwner?b.owner_email:undefined,maxBytes,items:await listItems(req)}};
+ const boardView=async req=>{const b=req.board;const members=(await pool.query('SELECT count(*) AS n FROM wall_members WHERE board_id=$1',[b.id])).rows[0];return {code:b.code,title:b.title,mode:b.mode,groups:b.groups,settings:b.settings,createdAt:b.created_at,lockAt:b.lock_at,stampText:b.stamp_text??DEFAULT_STAMP,url:boardUrl(b.code),members:Number(members.n),isOwner:req.isOwner,me:req.member?{id:req.member.id,name:req.member.name,group:req.member.group_index}:null,ownerEmail:req.isOwner?b.owner_email:undefined,maxBytes,items:await listItems(req)}};
 
  // إنشاء لوحة: يصل مفتاح الإدارة إلى البريد فقط (لا يُعرض في الاستجابة عندما يكون البريد مفعّلًا).
  app.post('/api/wall/boards',wrap(async(req,res)=>{
@@ -136,7 +138,12 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
   const groups=b.groups===undefined?cur.groups:(Array.isArray(b.groups)?b.groups.slice(0,12).map(g=>text(g,60,true)):cur.groups);if(mode!=='single'&&groups.length<2)throw fail('أضف مجموعتين على الأقل.');
   let lockAt=cur.lock_at;if(b.lockAt!==undefined){if(b.lockAt===null||b.lockAt==='')lockAt=null;else{const d=new Date(b.lockAt);if(isNaN(d))throw fail('تاريخ القفل غير صحيح.');lockAt=d.toISOString()}}
   const settings={...cur.settings};if(b.settings&&typeof b.settings==='object')for(const k of settingKeys)if(typeof b.settings[k]==='boolean')settings[k]=b.settings[k];
-  req.board=(await pool.query('UPDATE wall_boards SET title=$2,mode=$3,groups=$4,settings=$5,lock_at=$6,updated_at=now() WHERE id=$1 RETURNING *',[cur.id,title,mode,JSON.stringify(groups),JSON.stringify(settings),lockAt])).rows[0];req.board.settings=publicSettings(req.board.settings);
+  const stampText=b.stampText===undefined?(cur.stamp_text??DEFAULT_STAMP):(text(b.stampText,60)||DEFAULT_STAMP);
+  req.board=(await pool.query('UPDATE wall_boards SET title=$2,mode=$3,groups=$4,settings=$5,lock_at=$6,stamp_text=$7,updated_at=now() WHERE id=$1 RETURNING *',[cur.id,title,mode,JSON.stringify(groups),JSON.stringify(settings),lockAt,stampText])).rows[0];req.board.settings=publicSettings(req.board.settings);
+  const curPub=publicSettings(cur.settings);
+  if(stampText!==(cur.stamp_text??DEFAULT_STAMP)||req.board.settings.stampCompany!==curPub.stampCompany||req.board.settings.stamp!==curPub.stamp){
+   for(const r of (await pool.query("SELECT id FROM wall_items WHERE board_id=$1 AND status='ready' AND pages>0",[cur.id])).rows)enqueue(r.id);
+  }
   res.json(await boardView(req));
  }));
  app.post('/api/wall/boards/:code/join',loadBoard,wrap(async(req,res)=>{

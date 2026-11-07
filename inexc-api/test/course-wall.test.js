@@ -25,7 +25,7 @@ const waitReady=async(api,code,id,headers)=>{for(let i=0;i<200;i++){const it=(aw
 
 test('file kinds and settings normalisation',()=>{
  assert.equal(fileKind('a.PDF','application/octet-stream'),'pdf');assert.equal(fileKind('slides.pptx'),'office');assert.equal(fileKind('x.bin','image/png'),'image');assert.equal(fileKind('clip.mp4'),'video');assert.equal(fileKind('notes.md'),'text');assert.equal(fileKind('archive.zip'),'other');
- assert.deepEqual(publicSettings({comments:false,extra:1}),{uploadsOpen:true,comments:false,reactions:true,requireApproval:false,stamp:true,closed:false,allowDownload:true});
+ assert.deepEqual(publicSettings({comments:false,extra:1}),{uploadsOpen:true,comments:false,reactions:true,requireApproval:false,stamp:true,stampCompany:true,closed:false,allowDownload:true});
 });
 
 test('mode «both» lets a trainee enter alone (-1) or in a group',()=>{
@@ -99,6 +99,16 @@ test('a board is created by anyone, its admin key arrives by email only, trainee
  const rep=await api(`/api/wall/items/${ready.id}/replace`,'POST',form({},{field:'file',data:Buffer.from('نسخة محسنة من العمل'),type:'text/plain',name:'تحسين.txt'}),member);
  assert.equal(rep.status,200);assert.equal(rep.data.item.kind,'text');
  const ready2=await waitReady(api,code,ready.id,member);assert.equal(ready2.pages,1);assert.ok(ready2.likes>=0);
+ // نص الختم: تعديل وإخفاء يعيدان ختم الأعمال القائمة
+ assert.equal((await api('/api/wall/boards/'+code)).data.stampText,'شركة التميز الابتكاري');
+ const st=await api('/api/wall/boards/'+code,'PATCH',{stampText:'أكاديمية الريادة'},owner);
+ assert.equal(st.data.stampText,'أكاديمية الريادة');
+ const re1=await waitReady(api,code,ready.id,member);assert.equal(re1.status,'ready');
+ await api('/api/wall/boards/'+code,'PATCH',{settings:{stampCompany:false}},owner);
+ assert.equal((await api('/api/wall/boards/'+code)).data.settings.stampCompany,false);
+ await waitReady(api,code,ready.id,member);
+ assert.equal((await api('/api/wall/boards/'+code,'PATCH',{stampText:''},owner)).data.stampText,'شركة التميز الابتكاري');
+ await waitReady(api,code,ready.id,member);
  // قفل الرفع بموعد
  await api('/api/wall/boards/'+code,'PATCH',{lockAt:new Date(Date.now()-60000).toISOString()},owner);
  assert.equal((await api('/api/wall/boards/'+code+'/items','POST',form({},{field:'file',data:png1x1,type:'image/png',name:'late.png'}),member)).status,409);
