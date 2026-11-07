@@ -80,6 +80,11 @@ function cardEl(it,idx){
  el.innerHTML=`<div class="thumb">${thumb}<span class="open">افتح العمل</span></div>${badge||top||(it.mine?'<span class="badge me">عملك</span>':'')}<span class="no" dir="ltr">№ ${no}</span><div class="meta"><b>${esc(it.author)}</b><span class="ttl"><bdi>${esc(it.title)}</bdi></span><small><span>${metaOf(it)}</span><span>👍 ${it.likes} &nbsp; 💬 ${it.comments}</span></small></div>`;
  el.addEventListener('click',()=>openViewer(idx));el.addEventListener('keydown',e=>{if(e.key==='Enter')openViewer(idx)});return el;
 }
+async function downloadFile(url,filename){
+ try{say('جارٍ تجهيز التنزيل…',8000);const r=await fetch(API+url,{headers:headers()});if(!r.ok)throw 0;
+  const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),30000);say('✓ بدأ التنزيل');}
+ catch(e){window.open(API+url,'_blank','noopener')}
+}
 const metaOf=it=>it.pages>1?`${it.pages} صفحة`:it.pages===1?'صفحة واحدة':kindLabel[it.kind]||'ملف';
 
 /* ——— المدير ——— */
@@ -158,8 +163,8 @@ async function paintViewer(){
  const c=colorOf(it.author);$('v-owner').textContent=it.author;$('v-title').textContent=it.title;$('v-title').dir=/^[؀-ۿ]/.test(it.title)?'rtl':'ltr';$('v-by').textContent=`${metaOf(it)} · ${new Date(it.createdAt).toLocaleDateString('ar-AE',{day:'numeric',month:'long'})}`;
  $('v-nav').hidden=state.items.length<2;$('v-count').textContent=`${vIdx+1} / ${state.items.length}`;
  const own=state.board.isOwner;$('v-del').hidden=!(own||it.mine);$('v-del').textContent='حذف';$('v-approve').hidden=!(own&&!it.approved);
- const stamped=it.status==='ready'&&it.pages>0&&it.stampedUrl;$('v-dl').hidden=!(stamped||((state.board.settings.allowDownload||own||it.mine)&&['office','other','pdf','text','image'].includes(it.kind)));$('v-dl').textContent=stamped?'تنزيل بختم التميز (PDF)':'الملف الأصلي';$('v-dl').onclick=()=>window.open(API+(stamped?it.stampedUrl:it.fileUrl),'_blank','noopener');
- $('v-orig').hidden=!(stamped&&(own||it.mine));$('v-orig').onclick=()=>window.open(API+it.fileUrl,'_blank','noopener');
+ const stamped=it.status==='ready'&&it.pages>0&&it.stampedUrl;$('v-dl').hidden=!(stamped||((state.board.settings.allowDownload||own||it.mine)&&['office','other','pdf','text','image'].includes(it.kind)));$('v-dl').textContent=stamped?'تنزيل بختم التميز (PDF)':'الملف الأصلي';$('v-dl').onclick=()=>stamped?downloadFile(it.stampedUrl,`${it.title} - توقيع التميز.pdf`):downloadFile(it.fileUrl,it.fileName);
+ $('v-orig').hidden=!(stamped&&(own||it.mine));$('v-orig').onclick=()=>downloadFile(it.fileUrl,it.fileName);
  const stage=$('v-stage');const fileUrl=API+it.fileUrl;
  if(it.status==='processing'){stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">⏳</div><b>جارٍ تجهيز صفحات هذا العمل…</b><small>يُحوَّل الملف على الخادم إلى صفحات مختومة بتوقيع التميز، وتظهر هنا تلقائيًا خلال لحظات.</small></div>`;vPoll=setTimeout(async()=>{try{const r=await api('/wall/items/'+it.id);Object.assign(it,r.item);if(vItem===it)paintViewer()}catch{}},3000)}
  else if(it.status==='failed'){stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">⚠️</div><b>تعذّر تحويل هذا الملف</b><small>${esc(it.error||'')} ${own?'<br>يمكنك إعادة المحاولة من الزر أدناه.':''}</small>${own?'<p><button type="button" id="v-retry">إعادة المحاولة</button></p>':''}<p><a href="${fileUrl}" target="_blank" rel="noopener">فتح الملف الأصلي</a></p></div>`;$('v-retry')?.addEventListener('click',async()=>{try{await api(`/wall/items/${it.id}/retry`,{method:'POST',body:{}});it.status='processing';paintViewer()}catch(err){say(err.message)}})}
@@ -167,6 +172,7 @@ async function paintViewer(){
  else if(it.kind==='video')stage.innerHTML=`<video src="${fileUrl}" controls playsinline></video>`;
  else if(it.kind==='audio')stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">🎧</div><b><bdi>${esc(it.title)}</bdi></b><audio src="${fileUrl}" controls style="margin-top:12px;width:100%"></audio></div>`;
  else stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">${icons[it.kind]||icons.other}</div><b><bdi>${esc(it.fileName)}</bdi></b><small>${kindLabel[it.kind]} · ${(it.size/1024/1024).toFixed(2)} MB — لا يمكن عرض هذا النوع كصفحات</small><p><a href="${fileUrl}" target="_blank" rel="noopener">تنزيل الملف</a></p></div>`;
+ if(document.getElementById('v-dl-other'))document.getElementById('v-dl-other').onclick=()=>downloadFile(it.fileUrl,it.fileName);
  paintSocial(it);loadComments(it);
 }
 $('v-stage').addEventListener('click',e=>{const b=e.target.closest('[data-pg]');if(!b)return;const it=current();page=Math.min(Math.max(1,page+(b.dataset.pg==='next'?1:-1)),it.pages);paintViewer()});
