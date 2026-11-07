@@ -112,6 +112,7 @@ test('a board is created by anyone, its admin key arrives by email only, trainee
  sent.length=0;
  const mailAll=await api('/api/wall/boards/'+code+'/email','POST',{recipients:'all',note:'شكرًا لمشاركتكم'},owner);
  assert.equal(mailAll.data.sent>=2,true);assert.ok(sent.some(m=>m.to==='sara@example.com'));
+ assert.ok(sent[0].attachments?.[0]?.filename.includes('الألبوم'));assert.ok(sent[0].attachments[0].content.length>500);
  // الحاضرون الآن: نجعل الجميع غائبين إلا سارة
  await h.pool.query("UPDATE wall_members SET last_seen_at=now()-interval '1 hour' WHERE board_id=(SELECT id FROM wall_boards WHERE code=$1) AND email<>'sara@example.com'",[code]);
  sent.length=0;const online=await api('/api/wall/boards/'+code+'/email','POST',{recipients:'online'},owner);
@@ -119,6 +120,7 @@ test('a board is created by anyone, its admin key arrives by email only, trainee
  // إرسال عمل محدد إلى إيميل محدد
  sent.length=0;const one=await api('/api/wall/boards/'+code+'/email','POST',{recipients:'list',emails:['target@example.com'],itemId:ready2.id,note:'شاهد هذا'},owner);
  assert.equal(one.data.sent,1);assert.match(sent[0].subject,/من لوحة/);assert.ok(sent[0].text.includes('w='+ready2.id));
+ assert.ok(sent[0].attachments?.[0]?.filename.includes('توقيع التميز'));assert.equal(Buffer.from(sent[0].attachments[0].content,'base64').slice(0,4).toString(),'%PDF');
  assert.equal((await api('/api/wall/boards/'+code+'/email','POST',{recipients:'list',emails:['x@example.com'],itemId:crypto.randomUUID()},owner)).status,404);
  const mailList=await api('/api/wall/boards/'+code+'/email','POST',{recipients:'list',emails:['one@example.com','bad','one@example.com']},owner);
  assert.deepEqual({sent:mailList.data.sent,total:mailList.data.total},{sent:1,total:1});

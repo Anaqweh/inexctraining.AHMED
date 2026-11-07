@@ -26,15 +26,19 @@ async function api(path,{method='GET',body,form}={}){
 }
 
 /* ——— إنشاء لوحة ——— */
+const genGroups=(count,existing=[])=>Array.from({length:count},(_,i)=>existing[i]||`المجموعة ${i+1}`);
+
 function initCreate(){
  $('create-view').hidden=false;document.title='إنشاء لوحة أعمال | INEXC Training';
  let mode='single';const seg=m=>{mode=m;for(const k of ['single','groups','both'])$('c-'+k).setAttribute('aria-pressed',String(m===k));$('c-groups-wrap').hidden=m==='single'};
  for(const k of ['single','groups','both'])$('c-'+k).addEventListener('click',()=>seg(k));
+ let gCount=3;const paintG=()=>$('c-gcount').textContent=gCount;
+ $('c-gminus').addEventListener('click',()=>{gCount=Math.max(2,gCount-1);paintG()});
+ $('c-gplus').addEventListener('click',()=>{gCount=Math.min(12,gCount+1);paintG()});
  $('create-form').addEventListener('submit',async e=>{
   e.preventDefault();const st=$('c-status');st.className='status';st.textContent='جارٍ إنشاء اللوحة…';$('c-go').disabled=true;
   try{
-   const groups=$('c-groups-names').value.split(/[،,\n]/).map(s=>s.trim()).filter(Boolean);
-   const r=await api('/wall/boards',{method:'POST',body:{title:$('c-title').value.trim(),email:$('c-email').value.trim(),mode,groups:mode!=='single'&&groups.length>=2?groups:undefined,website:$('c-website').value}});
+   const r=await api('/wall/boards',{method:'POST',body:{title:$('c-title').value.trim(),email:$('c-email').value.trim(),mode,groups:mode!=='single'?genGroups(gCount):undefined,website:$('c-website').value}});
    st.textContent='';const ok=$('c-ok');ok.hidden=false;
    ok.innerHTML=`<h2>تم إنشاء اللوحة ✓</h2>${r.emailed?`<p>أرسلنا <b>رابط الإدارة</b> إلى <span dir="ltr">${esc($('c-email').value.trim())}</span>. افتحه من بريدك لتدخل كمدير وتضبط الإعدادات.</p>`:`<p>البريد غير مفعّل على الخادم حاليًا؛ هذا رابط الإدارة — احفظه ولا تشاركه:</p><p class="share"><code>${esc(r.adminUrl)}</code></p>`}<p>رابط المشاركة مع المتدربين:</p><div class="share"><code id="c-share">${esc(r.url)}</code><button type="button" id="c-copy">نسخ</button></div><p style="margin-top:12px"><a href="${esc(r.url)}">افتح اللوحة الآن ←</a></p>`;
    $('c-copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(r.url);say('🔗 نُسخ الرابط')}catch{say(r.url,5000)}});
@@ -61,7 +65,8 @@ function render(){
  const board=$('board');board.replaceChildren();board.classList.toggle('single',b.mode==='single');state.items=[];
  const cols=b.mode==='single'?[{name:'حائط الدفعة',index:0}]:[...(b.mode==='both'?[{name:'أعمال فردية',index:-1}]:[]),...b.groups.map((g,i)=>({name:g,index:i}))];
  for(const c of cols){
-  const items=b.items.filter(it=>b.mode==='single'||it.group===c.index);
+  const effGroup=it=>it.group===-1?-1:Math.min(it.group,b.groups.length-1);
+  const items=b.items.filter(it=>b.mode==='single'||effGroup(it)===c.index);
   const col=document.createElement('div');col.className='col';col.innerHTML=`<h2>${esc(c.name)} <small>${items.length} ${items.length===1?'عمل':'أعمال'}</small></h2><div class="cards"></div>`;
   const cards=col.querySelector('.cards');
   for(const it of items){const idx=state.items.push(it)-1;cards.append(cardEl(it,idx))}
@@ -109,7 +114,7 @@ function renderAdmin(){
  const chips=$('admin-chips');chips.replaceChildren();
  for(const [k,label] of Object.entries(settingLabels)){const c=document.createElement('button');c.type='button';c.className='chip';c.textContent=(b.settings[k]?'● ':'○ ')+label;c.setAttribute('aria-pressed',String(!!b.settings[k]));c.addEventListener('click',()=>patch({settings:{[k]:!b.settings[k]}}));chips.append(c)}
  for(const k of ['single','groups','both'])$('a-'+k).setAttribute('aria-pressed',String(b.mode===k));
- $('a-groups-row').hidden=b.mode==='single';if(document.activeElement!==$('a-groups-names'))$('a-groups-names').value=b.groups.join('، ');
+ $('a-groups-row').hidden=b.mode==='single';$('a-gcount').textContent=b.groups.length;
  if(document.activeElement!==$('a-title'))$('a-title').value=b.title;
 
  const la=$('a-lock');if(document.activeElement!==la)la.value=b.lockAt?new Date(new Date(b.lockAt).getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16):'';
@@ -124,8 +129,9 @@ function initAdmin(){
  $('a-lock-clear').addEventListener('click',()=>patch({lockAt:null}));
 
  $('a-single').addEventListener('click',()=>patch({mode:'single'}));
- for(const k of ['groups','both'])$('a-'+k).addEventListener('click',()=>{const groups=$('a-groups-names').value.split(/[،,\n]/).map(s=>s.trim()).filter(Boolean);patch({mode:k,groups:groups.length>=2?groups:undefined})});
- $('a-groups-save').addEventListener('click',()=>{const groups=$('a-groups-names').value.split(/[،,\n]/).map(s=>s.trim()).filter(Boolean);if(groups.length<2)return say('أضف مجموعتين على الأقل');patch({groups})});
+ for(const k of ['groups','both'])$('a-'+k).addEventListener('click',()=>patch({mode:k,groups:genGroups(Math.max(2,state.board.groups.length),state.board.groups)}));
+ $('a-gminus').addEventListener('click',()=>{const n=Math.max(2,state.board.groups.length-1);patch({groups:state.board.groups.slice(0,n)})});
+ $('a-gplus').addEventListener('click',()=>{const n=Math.min(12,state.board.groups.length+1);patch({groups:genGroups(n,state.board.groups)})});
  $('a-title-save').addEventListener('click',()=>patch({title:$('a-title').value.trim()}));
  $('a-copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(state.board.url);say('🔗 نُسخ رابط المتدربين')}catch{say(state.board.url,5000)}});
  $('recover').addEventListener('click',async e=>{e.preventDefault();const email=prompt('اكتب بريد مدير اللوحة لإرسال رابط إدارة جديد:');if(!email)return;try{const r=await api(`/wall/boards/${code}/recover`,{method:'POST',body:{email:email.trim()}});say(r.adminUrl?'هذا رابط الإدارة: '+r.adminUrl:'إن كان البريد صحيحًا فقد وصله رابط إدارة جديد ✓',6000)}catch(err){say(err.message,4000)}});
@@ -214,7 +220,7 @@ $('v-approve').addEventListener('click',async()=>{const it=current();try{await a
 const sd=$('send-dialog');let sendItem=null,sMode='all';
 function sSeg(m){sMode=m;for(const k of ['all','online','custom'])$('s-'+k).setAttribute('aria-pressed',String(m===k));$('s-emails-wrap').hidden=m!=='custom'}
 for(const k of ['all','online','custom'])$('s-'+k).addEventListener('click',()=>sSeg(k));
-function openSend(it){sendItem=it||null;$('send-what').textContent=sendItem?`${sendItem.title} — ${sendItem.author}`:state.board.title+' (روابط اللوحة وملفات كل متدرب)';sSeg('all');$('s-emails').value='';$('s-note').value='';sd.showModal()}
+function openSend(it){sendItem=it||null;$('send-what').textContent=sendItem?`${sendItem.title} — ${sendItem.author} (يُرفق الملف المختوم داخل البريد)`:`جميع ملفات الحائط — يُرفق ألبوم PDF كاملًا داخل البريد`;sSeg('all');$('s-emails').value='';$('s-note').value='';sd.showModal()}
 sd.addEventListener('click',e=>{if(e.target===sd)sd.close()});
 $('send-form').addEventListener('submit',async e=>{
  e.preventDefault();const body={recipients:sMode==='custom'?'list':sMode,note:$('s-note').value.trim()};

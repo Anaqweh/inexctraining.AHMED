@@ -148,16 +148,20 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
  app.post('/api/wall/boards/:code/leave',loadBoard,memberOnly,wrap(async(req,res)=>{await pool.query('UPDATE wall_members SET token_hash=$2 WHERE id=$1',[req.member.id,hash(crypto.randomBytes(32))]);res.json({ok:true})}));
  app.get('/api/wall/boards/:code/qr',loadBoard,wrap(async(req,res)=>{const {default:QRCode}=await import('qrcode');res.type('png');res.set('Cache-Control','public,max-age=86400');res.send(await QRCode.toBuffer(boardUrl(req.board.code),{width:480,margin:1,color:{dark:'#0b2b55'}}))}));
 
- app.get('/api/wall/boards/:code/export.pdf',loadBoard,ownerOnly,wrap(async(req,res)=>{
-  const items=(await pool.query("SELECT id,author_name,title,pages FROM wall_items WHERE board_id=$1 AND status='ready' AND pages>0 ORDER BY created_at",[req.board.id])).rows;
-  if(!items.length)throw fail('لا توجد أعمال جاهزة للتصدير بعد.',409);
-  const manifest={title:req.board.title,items:items.map(it=>({dir:itemDir(it.id),pages:it.pages,author:it.author_name,title:it.title}))};
+ async function buildAlbum(board){
+  const items=(await pool.query("SELECT id,author_name,title,pages FROM wall_items WHERE board_id=$1 AND status='ready' AND pages>0 ORDER BY created_at",[board.id])).rows;
+  if(!items.length)throw fail('لا توجد أعمال جاهزة بعد.',409);
+  const manifest={title:board.title,items:items.map(it=>({dir:itemDir(it.id),pages:it.pages,author:it.author_name,title:it.title}))};
   const tmp=path.join(dir,'export-'+crypto.randomUUID());fs.mkdirSync(tmp);
   const mf=path.join(tmp,'manifest.json'),out=path.join(tmp,'album.pdf');
   fs.writeFileSync(mf,JSON.stringify(manifest));
   await new Promise((resolve,reject)=>{const child=spawn('python3',[scriptPath,'export',mf,out],{stdio:['ignore','ignore','pipe']});let err='';child.stderr.on('data',d=>err+=d);const timer=setTimeout(()=>{child.kill('SIGKILL');reject(new Error('انتهت مهلة التصدير'))},5*60*1000);child.on('error',e=>{clearTimeout(timer);reject(e)});child.on('close',code=>{clearTimeout(timer);code===0?resolve():reject(new Error(err.trim().slice(-300)||'فشل التصدير'))})});
+  return {file:out,cleanup:()=>fs.rm(tmp,{recursive:true,force:true},()=>{})};
+ }
+ app.get('/api/wall/boards/:code/export.pdf',loadBoard,ownerOnly,wrap(async(req,res)=>{
+  const album=await buildAlbum(req.board);
   res.set({'Content-Type':'application/pdf','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(req.board.title+' - الألبوم.pdf')}`,'Cache-Control':'no-store'});
-  res.sendFile(out,e=>{fs.rm(tmp,{recursive:true,force:true},()=>{});if(e&&!res.headersSent)res.status(500).end()});
+  res.sendFile(album.file,e=>{album.cleanup();if(e&&!res.headersSent)res.status(500).end()});
  }));
  // إرسال الملفات بالبريد: للجميع المسجلين أو لإيميلات محددة
  app.post('/api/wall/boards/:code/email',loadBoard,ownerOnly,wrap(async(req,res)=>{
@@ -168,21 +172,25 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
   else if(req.body?.recipients==='online'){targets=(await pool.query("SELECT DISTINCT email FROM wall_members WHERE board_id=$1 AND email<>'' AND last_seen_at>now()-interval '10 minutes'",[req.board.id])).rows.map(r=>r.email)}
   else{const list=Array.isArray(req.body?.emails)?req.body.emails:[];targets=[...new Set(list.map(e=>String(e||'').trim().toLowerCase()).filter(e=>emailPattern.test(e)))].slice(0,100)}
   if(!targets.length)throw fail(req.body?.recipients==='online'?'لا يوجد متدربون حاضرون الآن (دخلوا خلال آخر ١٠ دقائق).':'لا يوجد مستلمون. تأكد من الإيميلات أو من دخول متدربين باللوحة.');
+  const maxAttach=15*1024*1024;let itemAttachment=null,albumAttachment=null,album=null,tooBig=false;
   let item=null;
   if(req.body?.itemId){if(!uuid.test(req.body.itemId))throw fail('العمل غير موجود.',404);item=(await pool.query("SELECT id,title,author_name FROM wall_items WHERE id=$1 AND board_id=$2 AND status='ready'",[req.body.itemId,req.board.id])).rows[0];if(!item)throw fail('العمل غير موجود أو غير جاهز.',404)}
+  if(item){const f=path.join(itemDir(item.id),'stamped.pdf');try{const st=fs.statSync(f);if(st.size<=maxAttach)itemAttachment=[{filename:`${item.title.slice(0,80)} - توقيع التميز.pdf`,content:fs.readFileSync(f).toString('base64')}];else tooBig=true}catch(e){}}
+  else{try{album=await buildAlbum(req.board);const st=fs.statSync(album.file);if(st.size<=maxAttach)albumAttachment=[{filename:`${req.board.title.slice(0,80)} - الألبوم.pdf`,content:fs.readFileSync(album.file).toString('base64')}];else tooBig=true}catch(e){if(e.status!==409)console.error(e)}finally{album?.cleanup()}}
+  const attachNote=tooBig?`<p style="font-size:12.5px;color:#7a5a12;background:#fff7e8;border-radius:8px;padding:8px 12px">الملف أكبر من حد البريد، لذا نرسل الرابط بدل المرفق.</p>`:'';
   const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const works=(await pool.query("SELECT i.title,i.author_name,i.id,m.email FROM wall_items i LEFT JOIN wall_members m ON m.id=i.member_id WHERE i.board_id=$1 AND i.status='ready' AND i.pages>0 ORDER BY i.created_at",[req.board.id])).rows;
   let sentCount=0;
   for(const to of targets){
    if(item){
-    const content=`<div style="font-size:21px;font-weight:800;color:#103b70">عمل من لوحة «${esc(req.board.title)}»</div><p style="font-size:15px;margin:12px 0 0"><strong>${esc(item.title)}</strong> — ${esc(item.author_name)}</p>${note?`<p style="font-size:14px;margin:10px 0 0">${esc(note)}</p>`:''}<div style="margin:16px 0;text-align:center"><a href="${origin}/wall/?b=${req.board.code}&w=${item.id}" style="display:inline-block;background:#0866c6;color:#fff;text-decoration:none;padding:11px 20px;border-radius:9px;font-size:14px;font-weight:700">مشاهدة العمل المختوم</a></div>`;
-    try{await sendEmail({to,subject:`${item.title} — من لوحة «${req.board.title}»`,html:emailShell?emailShell({title:'حائط الأعمال',preview:item.title,content}):content,text:`${origin}/wall/?b=${req.board.code}&w=${item.id}`});sentCount++}catch(e){console.error(e)}
+    const content=`<div style="font-size:21px;font-weight:800;color:#103b70">عمل من لوحة «${esc(req.board.title)}»</div><p style="font-size:15px;margin:12px 0 0"><strong>${esc(item.title)}</strong> — ${esc(item.author_name)}</p>${note?`<p style="font-size:14px;margin:10px 0 0">${esc(note)}</p>`:''}${itemAttachment?`<p style="font-size:13.5px;color:#0b7a4a">📎 الملف المختوم مرفق مع هذه الرسالة.</p>`:attachNote}<div style="margin:16px 0;text-align:center"><a href="${origin}/wall/?b=${req.board.code}&w=${item.id}" style="display:inline-block;background:#0866c6;color:#fff;text-decoration:none;padding:11px 20px;border-radius:9px;font-size:14px;font-weight:700">مشاهدة العمل على الحائط</a></div>`;
+    try{await sendEmail({to,subject:`${item.title} — من لوحة «${req.board.title}»`,html:emailShell?emailShell({title:'حائط الأعمال',preview:item.title,content}):content,text:`${origin}/wall/?b=${req.board.code}&w=${item.id}`,attachments:itemAttachment||undefined});sentCount++}catch(e){console.error(e)}
     continue;
    }
    const mine=works.filter(w=>w.email===to);
    const mineHtml=mine.length?`<p style="font-size:14px;margin:14px 0 4px"><strong>أعمالك المختومة بتوقيع التميز:</strong></p>`+mine.map(w=>`<p style="margin:4px 0;font-size:14px">• <a href="${origin}/wall/?b=${req.board.code}&w=${w.id}">${esc(w.title)}</a></p>`).join(''):'';
-   const content=`<div style="font-size:21px;font-weight:800;color:#103b70">ملفات لوحة «${esc(req.board.title)}»</div>${note?`<p style="font-size:15px;margin:12px 0 0">${esc(note)}</p>`:''}<p style="font-size:14px;margin:14px 0 0">جميع أعمال الدفعة معروضة ومختومة على الحائط:</p><div style="margin:14px 0;text-align:center"><a href="${boardUrl(req.board.code)}" style="display:inline-block;background:#0866c6;color:#fff;text-decoration:none;padding:11px 20px;border-radius:9px;font-size:14px;font-weight:700">فتح حائط الأعمال</a></div>${mineHtml}`;
-   try{await sendEmail({to,subject:`ملفات لوحة «${req.board.title}» — ${'شركة التميز الابتكاري'}`,html:emailShell?emailShell({title:'حائط الأعمال',preview:'ملفات اللوحة',content}):content,text:`${boardUrl(req.board.code)}`});sentCount++}catch(e){console.error(e)}
+   const content=`<div style="font-size:21px;font-weight:800;color:#103b70">ملفات لوحة «${esc(req.board.title)}»</div>${note?`<p style="font-size:15px;margin:12px 0 0">${esc(note)}</p>`:''}${albumAttachment?`<p style="font-size:13.5px;color:#0b7a4a">📎 ألبوم اللوحة كاملًا (كل الأعمال المختومة) مرفق مع هذه الرسالة.</p>`:attachNote}<p style="font-size:14px;margin:14px 0 0">جميع أعمال الدفعة معروضة ومختومة على الحائط:</p><div style="margin:14px 0;text-align:center"><a href="${boardUrl(req.board.code)}" style="display:inline-block;background:#0866c6;color:#fff;text-decoration:none;padding:11px 20px;border-radius:9px;font-size:14px;font-weight:700">فتح حائط الأعمال</a></div>${mineHtml}`;
+   try{await sendEmail({to,subject:`ملفات لوحة «${req.board.title}» — ${'شركة التميز الابتكاري'}`,html:emailShell?emailShell({title:'حائط الأعمال',preview:'ملفات اللوحة',content}):content,text:`${boardUrl(req.board.code)}`,attachments:albumAttachment||undefined});sentCount++}catch(e){console.error(e)}
   }
   res.json({ok:true,sent:sentCount,total:targets.length});
  }));

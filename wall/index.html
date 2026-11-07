@@ -8,9 +8,9 @@
 <title>حائط الأعمال | INEXC Training</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&display=swap">
-<link rel="stylesheet" href="/wall/wall.css?v=20261107-10">
+<link rel="stylesheet" href="/wall/wall.css?v=20261107-11">
 <script defer src="/inexc-registration-config.js"></script>
-<script defer src="/wall/wall.js?v=20261107-10"></script>
+<script defer src="/wall/wall.js?v=20261107-11"></script>
 <meta property="og:type" content="website">
 <meta property="og:title" content="حائط الأعمال | INEXC Training">
 <link rel="icon" href="/assets/inexc-icon.png" type="image/png">
@@ -38,7 +38,7 @@
       <label>نمط اللوحة</label>
       <div class="seg" role="group" aria-label="نمط اللوحة"><button type="button" id="c-single" aria-pressed="true">دخول فردي</button><button type="button" id="c-groups" aria-pressed="false">مجموعات</button><button type="button" id="c-both" aria-pressed="false">كلاهما</button></div>
       <p class="hint" style="margin:-6px 0 14px">«كلاهما»: يختار كل متدرب عند دخوله إمّا الدخول الفردي أو الانضمام إلى مجموعة.</p>
-      <label id="c-groups-wrap" hidden>أسماء المجموعات (افصل بينها بفاصلة)<input id="c-groups-names" maxlength="400" placeholder="المجموعة الأولى، المجموعة الثانية، المجموعة الثالثة"></label>
+      <div id="c-groups-wrap" hidden style="margin-bottom:14px"><span style="font-size:14.5px;color:#9db4cf">عدد المجموعات:</span><span class="stepper"><button type="button" id="c-gminus" aria-label="أنقص">−</button><b id="c-gcount">3</b><button type="button" id="c-gplus" aria-label="زد">+</button></span></div>
       <div class="honey" aria-hidden="true"><label>الموقع<input id="c-website" tabindex="-1" autocomplete="off"></label></div>
       <button class="primary" id="c-go" type="submit">إنشاء اللوحة وإرسال رابط الإدارة ←</button>
       <p class="status" id="c-status" role="status"></p>
@@ -61,7 +61,7 @@
       <h2>لوحة المدير <small>الإعدادات بيدك</small></h2>
       <div class="chips" id="admin-chips"></div>
       <div class="admin-row"><span>نمط اللوحة:</span><div class="seg"><button id="a-single">دخول فردي</button><button id="a-groups">مجموعات</button><button id="a-both">كلاهما</button></div></div>
-      <div class="admin-row" id="a-groups-row" hidden><span>المجموعات:</span><input id="a-groups-names" maxlength="400" placeholder="افصل بين الأسماء بفاصلة"><button id="a-groups-save">حفظ المجموعات</button></div>
+      <div class="admin-row" id="a-groups-row" hidden><span>عدد المجموعات:</span><span class="stepper"><button type="button" id="a-gminus" aria-label="أنقص">−</button><b id="a-gcount">3</b><button type="button" id="a-gplus" aria-label="زد">+</button></span></div>
       <div class="admin-row"><span>أدوات:</span><button id="a-present">▶ اعرض على الشاشة</button><button id="a-export">تصدير اللوحة PDF</button></div>
       <div class="admin-row"><span>قفل الرفع:</span><input id="a-lock" type="datetime-local" style="flex:0 1 auto;min-width:0"><button id="a-lock-save">تفعيل القفل</button><button id="a-lock-clear" hidden>إلغاء القفل</button></div>
       <div class="admin-row"><span>إرسال بالبريد:</span><button id="a-mail">✉ إرسال روابط اللوحة والملفات</button></div>
