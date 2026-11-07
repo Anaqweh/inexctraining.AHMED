@@ -12,7 +12,7 @@ const hue=n=>{let h=0;for(const ch of String(n))h=(h*31+ch.codePointAt(0))%360;r
 const colorOf=n=>`hsl(${hue(n)} 62% 38%)`;
 const icons={image:'🖼️',pdf:'📄',office:'📊',text:'📝',video:'🎬',audio:'🎧',other:'📦'};
 const kindLabel={image:'صورة',pdf:'PDF',office:'مستند',text:'نص',video:'فيديو',audio:'صوت',other:'ملف'};
-const settingLabels={uploadsOpen:'الرفع مفتوح',comments:'التعليقات',reactions:'التفاعل (أعجبني / يستحق التطوير)',requireApproval:'موافقة المدير قبل الظهور',stamp:'ختم توقيع التميز تلقائيًا',allowDownload:'السماح بتنزيل الملف الأصلي',closed:'إغلاق اللوحة بالكامل'};
+const settingLabels={uploadsOpen:'الرفع مفتوح',comments:'التعليقات',reactions:'التفاعل (أعجبني / يستحق التطوير)',requireApproval:'موافقة المدير قبل الظهور',stamp:'ختم توقيع التميز تلقائيًا',stampCompany:'إظهار اسم الشركة في الختم',allowDownload:'السماح بتنزيل الملف الأصلي',closed:'إغلاق اللوحة بالكامل'};
 const say=(m,ms=2600)=>{const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(say.t);say.t=setTimeout(()=>t.classList.remove('show'),ms)};
 const state={board:null,items:[],me:null,token:'',admin:store.get(KEY_ADMIN)||'',afterJoin:null,pollTimer:null};
 try{const saved=JSON.parse(store.get(KEY_ME)||'null');if(saved?.token){state.token=saved.token;state.me=saved.me}}catch{}
@@ -116,6 +116,7 @@ function renderAdmin(){
  for(const k of ['single','groups','both'])$('a-'+k).setAttribute('aria-pressed',String(b.mode===k));
  $('a-groups-row').hidden=b.mode==='single';$('a-gcount').textContent=b.groups.length;
  if(document.activeElement!==$('a-title'))$('a-title').value=b.title;
+ if(document.activeElement!==$('a-stamp'))$('a-stamp').value=b.stampText||'';
 
  const la=$('a-lock');if(document.activeElement!==la)la.value=b.lockAt?new Date(new Date(b.lockAt).getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16):'';
  $('a-lock-clear').hidden=!b.lockAt;
@@ -133,6 +134,7 @@ function initAdmin(){
  $('a-gminus').addEventListener('click',()=>{const n=Math.max(2,state.board.groups.length-1);patch({groups:state.board.groups.slice(0,n)})});
  $('a-gplus').addEventListener('click',()=>{const n=Math.min(12,state.board.groups.length+1);patch({groups:genGroups(n,state.board.groups)})});
  $('a-title-save').addEventListener('click',()=>patch({title:$('a-title').value.trim()}));
+ $('a-stamp-save').addEventListener('click',async()=>{await patch({stampText:$('a-stamp').value.trim()});say('✓ حُفظ — يُعاد ختم الأعمال القائمة بالنص الجديد',4500)});
  $('a-copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(state.board.url);say('🔗 نُسخ رابط المتدربين')}catch{say(state.board.url,5000)}});
  $('recover').addEventListener('click',async e=>{e.preventDefault();const email=prompt('اكتب بريد مدير اللوحة لإرسال رابط إدارة جديد:');if(!email)return;try{const r=await api(`/wall/boards/${code}/recover`,{method:'POST',body:{email:email.trim()}});say(r.adminUrl?'هذا رابط الإدارة: '+r.adminUrl:'إن كان البريد صحيحًا فقد وصله رابط إدارة جديد ✓',6000)}catch(err){say(err.message,4000)}});
 }

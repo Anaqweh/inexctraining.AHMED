@@ -7,8 +7,8 @@ import glob, json, os, shutil, subprocess, sys, tempfile
 from PIL import Image, ImageDraw, ImageFont, ImageOps, features
 
 MAX_PAGES = 300
-PAGE_WIDTH = 1400
-DPI = 110
+PAGE_WIDTH = 1700
+DPI = 150
 
 def log(msg):
     sys.stderr.write(str(msg) + "\n")
@@ -104,15 +104,26 @@ def stamp(img, meta, page_no, total):
     latin = font(LATIN, int(band * 0.26))
     cy = top + band // 2 + max(1, band // 16)
     name = str(meta.get("name") or "")[:60]
-    company = str(meta.get("company") or "شركة التميز الابتكاري")
+    company = str(meta.get("company") if meta.get("company") is not None else "شركة التميز الابتكاري").strip()
     brand = str(meta.get("brand") or "INEXC TRAINING")
-    draw_text(d, (w - pad, cy), "✦ " + name, big, (255, 255, 255), anchor="rm")
-    draw_text(d, (w // 2, cy), company, big, (212, 167, 58), anchor="mm")
+
+    def fitted(text_value, start, max_w, rtl=True):
+        size = start
+        fnt = font(ARABIC_BOLD, size)
+        while size > int(band * 0.22) and text_width(d, text_value, fnt, rtl=rtl) > max_w:
+            size -= 2
+            fnt = font(ARABIC_BOLD, size)
+        return fnt
+
+    # اليمين: اسم المتدرب وحده، موزونًا في منتصف الشريط بلا سطور إضافية
+    name_font = fitted("✦ " + name, int(band * 0.44), w * 0.40)
+    draw_text(d, (w - pad, cy), "✦ " + name, name_font, (255, 255, 255), anchor="rm")
+    # الوسط: اسم الشركة — قابل للتغيير أو الإخفاء من إعدادات اللوحة
+    if company:
+        draw_text(d, (w // 2, cy), company, fitted(company, int(band * 0.42), w * 0.34), (244, 200, 106), anchor="mm")
+    # اليسار: العلامة ورقم الصفحة
     draw_text(d, (pad, cy - int(band * 0.16)), brand, latin, (205, 226, 255), anchor="lm", rtl=False)
     draw_text(d, (pad, cy + int(band * 0.2)), f"{page_no} / {total}", latin, (140, 170, 210), anchor="lm", rtl=False)
-    board = str(meta.get("board") or "")[:70]
-    if board and text_width(d, board, small) < w * 0.25:
-        draw_text(d, (w - pad, cy + int(band * 0.3)), board, small, (190, 210, 240), anchor="rm")
     return out
 
 def run(cmd, timeout, env=None):
@@ -145,7 +156,7 @@ def export_album(manifest_path, out_path):
     """ألبوم اللوحة: غلاف بهوية التميز ثم كل صفحات الأعمال المختومة في PDF واحد."""
     with open(manifest_path, encoding="utf-8") as f:
         manifest = json.load(f)
-    width = 1000
+    width = 1300
     def cover():
         im = Image.new("RGB", (width, int(width * 1.414)), (13, 70, 137))
         d = ImageDraw.Draw(im)
