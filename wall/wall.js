@@ -230,10 +230,9 @@ $('send-form').addEventListener('submit',async e=>{
  if(sendItem)body.itemId=sendItem.id;$('s-go').disabled=true;
  try{const r=await api(`/wall/boards/${code}/email`,{method:'POST',body});sd.close();say(`✓ أُرسل إلى ${r.sent} من ${r.total}`,5000)}catch(err){say(err.message,5000)}finally{$('s-go').disabled=false}});
 /* ——— العرض على الشاشة ——— */
-let shI=0,shP=1,shTimer=null,shPaused=false;
+let shI=0,shP=1;
 const shItems=()=>state.items.filter(i=>i.status==='ready'&&i.pages>0);
-function startShow(fromItem){const list=shItems();if(!list.length)return say('لا أعمال جاهزة للعرض بعد');shI=fromItem?Math.max(0,list.findIndex(x=>x.id===fromItem.id)):0;shP=1;shPaused=false;$('show').hidden=false;try{$('show').requestFullscreen?.()}catch{}paintShow();shLoop()}
-function shLoop(){clearInterval(shTimer);shTimer=setInterval(()=>{if(!shPaused)shNext()},8000)}
+function startShow(fromItem){const list=shItems();if(!list.length)return say('لا أعمال جاهزة للعرض بعد');shI=fromItem?Math.max(0,list.findIndex(x=>x.id===fromItem.id)):0;shP=1;$('show').hidden=false;try{$('show').requestFullscreen?.()}catch{}paintShow()}
 function shNext(){const list=shItems();const it=list[shI];if(!it)return endShow();if(shP<it.pages)shP++;else{shI=(shI+1)%list.length;shP=1}paintShow()}
 function shPrev(){const list=shItems();if(shP>1)shP--;else{shI=(shI-1+list.length)%list.length;shP=shItems()[shI].pages}paintShow()}
 function paintShow(){const list=shItems();const it=list[shI];if(!it)return endShow();
@@ -243,13 +242,12 @@ function paintShow(){const list=shItems();const it=list[shI];if(!it)return endSh
  $('sh-name').textContent=it.author;$('sh-title').textContent=it.title;
  const pg=$('sh-page');pg.hidden=it.pages<2;pg.textContent=`صفحة ${shP} / ${it.pages}`;
  $('sh-count').textContent=`عمل ${shI+1} / ${list.length}`}
-function endShow(){clearInterval(shTimer);$('show').hidden=true;try{if(document.fullscreenElement)document.exitFullscreen?.()}catch{}}
+function endShow(){$('show').hidden=true;try{if(document.fullscreenElement)document.exitFullscreen?.()}catch{}}
 $('sh-exit').addEventListener('click',endShow);
-$('sh-prev').addEventListener('click',()=>{shPrev();shLoop()});
-$('sh-next').addEventListener('click',()=>{shNext();shLoop()});
-$('sh-prev-item').addEventListener('click',()=>{shI=(shI-1+shItems().length)%shItems().length;shP=1;paintShow();shLoop()});
-$('sh-next-item').addEventListener('click',()=>{shI=(shI+1)%shItems().length;shP=1;paintShow();shLoop()});
-$('sh-pause').addEventListener('click',e=>{shPaused=!shPaused;e.currentTarget.textContent=shPaused?'▶':'⏸'});
+$('sh-prev').addEventListener('click',shPrev);
+$('sh-next').addEventListener('click',shNext);
+$('sh-prev-item').addEventListener('click',()=>{shI=(shI-1+shItems().length)%shItems().length;shP=1;paintShow()});
+$('sh-next-item').addEventListener('click',()=>{shI=(shI+1)%shItems().length;shP=1;paintShow()});
 document.addEventListener('keydown',e=>{if($('show').hidden)return;if(e.key==='Escape')endShow();if(e.key==='ArrowLeft')$('sh-next').click();if(e.key==='ArrowRight')$('sh-prev').click()});
 document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&!$('show').hidden&&!vw.open)endShow()});
 /* ——— استبدال الملف ——— */
