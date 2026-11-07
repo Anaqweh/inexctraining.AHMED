@@ -16,6 +16,8 @@ const text=(value,max,required=false)=>{if(value==null)value='';if(typeof value!
 const hash=value=>crypto.createHash('sha256').update(String(value)).digest('hex');
 const newCode=()=>crypto.randomBytes(6).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g,'').padEnd(8,'x').slice(0,8);
 const defaultGroups=['المجموعة الأولى','المجموعة الثانية','المجموعة الثالثة'];
+const emailPattern=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const lockPassed=b=>!!(b.lock_at&&new Date(b.lock_at)<=new Date());
 const defaultSettings={uploadsOpen:true,comments:true,reactions:true,requireApproval:false,stamp:true,closed:false,allowDownload:true};
 const settingKeys=Object.keys(defaultSettings);
 const scriptPath=fileURLToPath(new URL('./wall-render.py',import.meta.url));
@@ -45,6 +47,10 @@ export async function setupCourseWall(pool){
  await pool.query(`CREATE TABLE IF NOT EXISTS wall_comments(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),item_id UUID NOT NULL REFERENCES wall_items(id) ON DELETE CASCADE,member_id UUID REFERENCES wall_members(id) ON DELETE SET NULL,author_name TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',image_name TEXT NOT NULL DEFAULT '',created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
  await pool.query(`CREATE TABLE IF NOT EXISTS wall_reactions(item_id UUID NOT NULL REFERENCES wall_items(id) ON DELETE CASCADE,member_id UUID NOT NULL REFERENCES wall_members(id) ON DELETE CASCADE,kind TEXT NOT NULL CHECK(kind IN ('like','idea')),created_at TIMESTAMPTZ NOT NULL DEFAULT now(),PRIMARY KEY(item_id,member_id,kind))`);
  await pool.query('ALTER TABLE wall_items ADD COLUMN IF NOT EXISTS stamp_version INTEGER NOT NULL DEFAULT 0');
+ await pool.query("ALTER TABLE wall_members ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT ''");
+ await pool.query('ALTER TABLE wall_boards ADD COLUMN IF NOT EXISTS lock_at TIMESTAMPTZ');
+ await pool.query('ALTER TABLE wall_comments ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES wall_comments(id) ON DELETE CASCADE');
+ await pool.query(`CREATE TABLE IF NOT EXISTS wall_comment_reactions(comment_id UUID NOT NULL REFERENCES wall_comments(id) ON DELETE CASCADE,member_id UUID NOT NULL REFERENCES wall_members(id) ON DELETE CASCADE,kind TEXT NOT NULL CHECK(kind IN ('like','logical','creative')),created_at TIMESTAMPTZ NOT NULL DEFAULT now(),PRIMARY KEY(comment_id,member_id,kind))`);
  await pool.query('ALTER TABLE wall_boards DROP CONSTRAINT IF EXISTS wall_boards_mode_check');
  await pool.query("ALTER TABLE wall_boards ADD CONSTRAINT wall_boards_mode_check CHECK (mode IN ('single','groups','both'))");
  await pool.query('CREATE INDEX IF NOT EXISTS wall_items_board ON wall_items(board_id,created_at DESC)');
@@ -96,7 +102,7 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
 
  const itemView=(req,it)=>({id:it.id,title:it.title,fileName:it.file_name,kind:it.kind,mime:it.mime,size:Number(it.size_bytes),pages:it.pages,status:it.status,approved:it.approved,author:it.author_name,group:it.group_index,createdAt:it.created_at,likes:Number(it.likes||0),ideas:Number(it.ideas||0),comments:Number(it.comment_count||0),mine:!!(req.member&&req.member.id===it.member_id),myLike:!!it.my_like,myIdea:!!it.my_idea,fileUrl:`/wall/items/${it.id}/file`,pageUrl:`/wall/items/${it.id}/pages/`,stampedUrl:it.pages>0?`/wall/items/${it.id}/stamped.pdf`:null});
  const listItems=async(req)=>{const mid=req.member?.id||null;const rows=(await pool.query(`SELECT i.*,(SELECT count(*) FROM wall_reactions r WHERE r.item_id=i.id AND r.kind='like') AS likes,(SELECT count(*) FROM wall_reactions r WHERE r.item_id=i.id AND r.kind='idea') AS ideas,(SELECT count(*) FROM wall_comments c WHERE c.item_id=i.id) AS comment_count,EXISTS(SELECT 1 FROM wall_reactions r WHERE r.item_id=i.id AND r.kind='like' AND r.member_id=$2) AS my_like,EXISTS(SELECT 1 FROM wall_reactions r WHERE r.item_id=i.id AND r.kind='idea' AND r.member_id=$2) AS my_idea FROM wall_items i WHERE i.board_id=$1 ORDER BY i.created_at DESC LIMIT $3`,[req.board.id,mid,maxItems])).rows;return rows.filter(it=>canSee(req,it)).map(it=>itemView(req,it))};
- const boardView=async req=>{const b=req.board;const members=(await pool.query('SELECT count(*) AS n FROM wall_members WHERE board_id=$1',[b.id])).rows[0];return {code:b.code,title:b.title,mode:b.mode,groups:b.groups,settings:b.settings,createdAt:b.created_at,url:boardUrl(b.code),members:Number(members.n),isOwner:req.isOwner,me:req.member?{id:req.member.id,name:req.member.name,group:req.member.group_index}:null,ownerEmail:req.isOwner?b.owner_email:undefined,maxBytes,items:await listItems(req)}};
+ const boardView=async req=>{const b=req.board;const members=(await pool.query('SELECT count(*) AS n FROM wall_members WHERE board_id=$1',[b.id])).rows[0];return {code:b.code,title:b.title,mode:b.mode,groups:b.groups,settings:b.settings,createdAt:b.created_at,lockAt:b.lock_at,url:boardUrl(b.code),members:Number(members.n),isOwner:req.isOwner,me:req.member?{id:req.member.id,name:req.member.name,group:req.member.group_index}:null,ownerEmail:req.isOwner?b.owner_email:undefined,maxBytes,items:await listItems(req)}};
 
  // إنشاء لوحة: يصل مفتاح الإدارة إلى البريد فقط (لا يُعرض في الاستجابة عندما يكون البريد مفعّلًا).
  app.post('/api/wall/boards',wrap(async(req,res)=>{
@@ -128,23 +134,54 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
  app.patch('/api/wall/boards/:code',loadBoard,ownerOnly,wrap(async(req,res)=>{
   const b=req.body||{},cur=req.board;const title=b.title===undefined?cur.title:text(b.title,120,true);const mode=b.mode===undefined?cur.mode:modeOf(b.mode);
   const groups=b.groups===undefined?cur.groups:(Array.isArray(b.groups)?b.groups.slice(0,12).map(g=>text(g,60,true)):cur.groups);if(mode!=='single'&&groups.length<2)throw fail('أضف مجموعتين على الأقل.');
+  let lockAt=cur.lock_at;if(b.lockAt!==undefined){if(b.lockAt===null||b.lockAt==='')lockAt=null;else{const d=new Date(b.lockAt);if(isNaN(d))throw fail('تاريخ القفل غير صحيح.');lockAt=d.toISOString()}}
   const settings={...cur.settings};if(b.settings&&typeof b.settings==='object')for(const k of settingKeys)if(typeof b.settings[k]==='boolean')settings[k]=b.settings[k];
-  req.board=(await pool.query('UPDATE wall_boards SET title=$2,mode=$3,groups=$4,settings=$5,updated_at=now() WHERE id=$1 RETURNING *',[cur.id,title,mode,JSON.stringify(groups),JSON.stringify(settings)])).rows[0];req.board.settings=publicSettings(req.board.settings);
+  req.board=(await pool.query('UPDATE wall_boards SET title=$2,mode=$3,groups=$4,settings=$5,lock_at=$6,updated_at=now() WHERE id=$1 RETURNING *',[cur.id,title,mode,JSON.stringify(groups),JSON.stringify(settings),lockAt])).rows[0];req.board.settings=publicSettings(req.board.settings);
   res.json(await boardView(req));
  }));
  app.post('/api/wall/boards/:code/join',loadBoard,wrap(async(req,res)=>{
   limit('join:'+ipOf(req),120);const b=req.board;if(b.settings.closed)throw fail('أغلق مدير اللوحة الدخول إليها.',409);
-  const name=text(req.body?.name,60,true);const group=normGroup(b,req.body?.group);
-  const token=crypto.randomBytes(32).toString('hex');const m=(await pool.query('INSERT INTO wall_members(board_id,name,group_index,token_hash) VALUES($1,$2,$3,$4) RETURNING id,name,group_index',[b.id,name,group,hash(token)])).rows[0];
+  const name=text(req.body?.name,60,true);const email=text(req.body?.email,190,true).toLowerCase();if(!emailPattern.test(email))throw fail('اكتب بريدًا إلكترونيًا صحيحًا.');const group=normGroup(b,req.body?.group);
+  const token=crypto.randomBytes(32).toString('hex');const m=(await pool.query('INSERT INTO wall_members(board_id,name,group_index,token_hash,email) VALUES($1,$2,$3,$4,$5) RETURNING id,name,group_index',[b.id,name,group,hash(token),email])).rows[0];
   res.status(201).json({token,me:{id:m.id,name:m.name,group:m.group_index}});
  }));
  app.post('/api/wall/boards/:code/leave',loadBoard,memberOnly,wrap(async(req,res)=>{await pool.query('UPDATE wall_members SET token_hash=$2 WHERE id=$1',[req.member.id,hash(crypto.randomBytes(32))]);res.json({ok:true})}));
  app.get('/api/wall/boards/:code/qr',loadBoard,wrap(async(req,res)=>{const {default:QRCode}=await import('qrcode');res.type('png');res.set('Cache-Control','public,max-age=86400');res.send(await QRCode.toBuffer(boardUrl(req.board.code),{width:480,margin:1,color:{dark:'#0b2b55'}}))}));
 
+ app.get('/api/wall/boards/:code/export.pdf',loadBoard,ownerOnly,wrap(async(req,res)=>{
+  const items=(await pool.query("SELECT id,author_name,title,pages FROM wall_items WHERE board_id=$1 AND status='ready' AND pages>0 ORDER BY created_at",[req.board.id])).rows;
+  if(!items.length)throw fail('لا توجد أعمال جاهزة للتصدير بعد.',409);
+  const manifest={title:req.board.title,items:items.map(it=>({dir:itemDir(it.id),pages:it.pages,author:it.author_name,title:it.title}))};
+  const tmp=path.join(dir,'export-'+crypto.randomUUID());fs.mkdirSync(tmp);
+  const mf=path.join(tmp,'manifest.json'),out=path.join(tmp,'album.pdf');
+  fs.writeFileSync(mf,JSON.stringify(manifest));
+  await new Promise((resolve,reject)=>{const child=spawn('python3',[scriptPath,'export',mf,out],{stdio:['ignore','ignore','pipe']});let err='';child.stderr.on('data',d=>err+=d);const timer=setTimeout(()=>{child.kill('SIGKILL');reject(new Error('انتهت مهلة التصدير'))},5*60*1000);child.on('error',e=>{clearTimeout(timer);reject(e)});child.on('close',code=>{clearTimeout(timer);code===0?resolve():reject(new Error(err.trim().slice(-300)||'فشل التصدير'))})});
+  res.set({'Content-Type':'application/pdf','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(req.board.title+' - الألبوم.pdf')}`,'Cache-Control':'no-store'});
+  res.sendFile(out,e=>{fs.rm(tmp,{recursive:true,force:true},()=>{});if(e&&!res.headersSent)res.status(500).end()});
+ }));
+ // إرسال الملفات بالبريد: للجميع المسجلين أو لإيميلات محددة
+ app.post('/api/wall/boards/:code/email',loadBoard,ownerOnly,wrap(async(req,res)=>{
+  if(!mailEnabled)throw fail('البريد غير مفعّل على الخادم.',409);
+  limit('bmail:'+req.board.id,20);const note=text(req.body?.note||'',500);
+  let targets=[];
+  if(req.body?.recipients==='all'){targets=(await pool.query("SELECT DISTINCT email FROM wall_members WHERE board_id=$1 AND email<>''",[req.board.id])).rows.map(r=>r.email)}
+  else{const list=Array.isArray(req.body?.emails)?req.body.emails:[];targets=[...new Set(list.map(e=>String(e||'').trim().toLowerCase()).filter(e=>emailPattern.test(e)))].slice(0,100)}
+  if(!targets.length)throw fail('لا يوجد مستلمون. تأكد من الإيميلات أو من دخول متدربين باللوحة.');
+  const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const works=(await pool.query("SELECT i.title,i.author_name,i.id,m.email FROM wall_items i LEFT JOIN wall_members m ON m.id=i.member_id WHERE i.board_id=$1 AND i.status='ready' AND i.pages>0 ORDER BY i.created_at",[req.board.id])).rows;
+  let sentCount=0;
+  for(const to of targets){
+   const mine=works.filter(w=>w.email===to);
+   const mineHtml=mine.length?`<p style="font-size:14px;margin:14px 0 4px"><strong>أعمالك المختومة بتوقيع التميز:</strong></p>`+mine.map(w=>`<p style="margin:4px 0;font-size:14px">• <a href="${origin}/wall/?b=${req.board.code}&w=${w.id}">${esc(w.title)}</a></p>`).join(''):'';
+   const content=`<div style="font-size:21px;font-weight:800;color:#103b70">ملفات لوحة «${esc(req.board.title)}»</div>${note?`<p style="font-size:15px;margin:12px 0 0">${esc(note)}</p>`:''}<p style="font-size:14px;margin:14px 0 0">جميع أعمال الدفعة معروضة ومختومة على الحائط:</p><div style="margin:14px 0;text-align:center"><a href="${boardUrl(req.board.code)}" style="display:inline-block;background:#0866c6;color:#fff;text-decoration:none;padding:11px 20px;border-radius:9px;font-size:14px;font-weight:700">فتح حائط الأعمال</a></div>${mineHtml}`;
+   try{await sendEmail({to,subject:`ملفات لوحة «${req.board.title}» — ${'شركة التميز الابتكاري'}`,html:emailShell?emailShell({title:'حائط الأعمال',preview:'ملفات اللوحة',content}):content,text:`${boardUrl(req.board.code)}`});sentCount++}catch(e){console.error(e)}
+  }
+  res.json({ok:true,sent:sentCount,total:targets.length});
+ }));
  app.post('/api/wall/boards/:code/items',loadBoard,memberOnly,(req,res,next)=>uploader(req,res,async uploadError=>{
   let keep=false;const id=req.wallItemId;try{
    if(uploadError)throw fail(uploadError.code==='LIMIT_FILE_SIZE'?'الحد الأقصى للملف 25 ميغابايت.':'تعذّر رفع الملف.');
-   const b=req.board;if(!b.settings.uploadsOpen||b.settings.closed)throw fail('أوقف مدير اللوحة استقبال الأعمال حاليًا.',409);if(!req.file)throw fail('اختر الملف أولًا.');
+   const b=req.board;if(!b.settings.uploadsOpen||b.settings.closed)throw fail('أوقف مدير اللوحة استقبال الأعمال حاليًا.',409);if(lockPassed(b))throw fail('انتهى موعد رفع الأعمال في هذه اللوحة.',409);if(!req.file)throw fail('اختر الملف أولًا.');
    limit('upload:'+ipOf(req),120);
    const fileName=path.basename(Buffer.from(req.file.originalname,'latin1').toString('utf8')).replace(/[\x00-\x1f\x7f]/g,'').slice(0,200)||'file';
    const title=text(req.body?.title||'',120)||fileName.replace(/\.[a-z0-9]{1,5}$/i,'');
@@ -156,6 +193,22 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
    res.status(201).json({ok:true,item:itemView(req,it)});
   }catch(e){next(e)}finally{if(!keep&&id)fs.rm(itemDir(id),{recursive:true,force:true},()=>{})}
  }));
+ const replaceUploader=multer({storage:multer.diskStorage({destination:(req,_f,cb)=>cb(null,itemDir(req.params.id)),filename:(_r,_f,cb)=>cb(null,'incoming.bin')}),limits:{fileSize:maxBytes,files:1,fields:4,fieldSize:4000}}).single('file');
+ app.post('/api/wall/items/:id/replace',loadItem,loadBoard,memberOnly,(req,res,next)=>replaceUploader(req,res,async uploadError=>{try{
+  const it=req.item,b=req.board;if(!(req.isOwner||req.member.id===it.member_id))throw fail('استبدال الملف لصاحب العمل أو مدير اللوحة فقط.',403);
+  if(uploadError)throw fail(uploadError.code==='LIMIT_FILE_SIZE'?'الحد الأقصى للملف 25 ميغابايت.':'تعذّر رفع الملف.');
+  if(!req.file)throw fail('اختر الملف أولًا.');
+  if(!req.isOwner&&(!b.settings.uploadsOpen||b.settings.closed||lockPassed(b)))throw fail('الرفع متوقف حاليًا.',409);
+  const stats=(await pool.query('SELECT COALESCE(sum(size_bytes),0) AS bytes FROM wall_items WHERE board_id=$1 AND id<>$2',[b.id,it.id])).rows[0];
+  if(Number(stats.bytes)+req.file.size>quotaBytes){fs.unlink(req.file.path,()=>{});throw fail('امتلأت مساحة هذه اللوحة.',409)}
+  const fileName=path.basename(Buffer.from(req.file.originalname,'latin1').toString('utf8')).replace(/[\x00-\x1f\x7f]/g,'').slice(0,200)||'file';
+  const kind=fileKind(fileName,req.file.mimetype);
+  fs.renameSync(req.file.path,path.join(itemDir(it.id),'original.bin'));
+  for(const p of fs.readdirSync(itemDir(it.id)))if(/^page-\d+\.png$|^stamped\.pdf$/.test(p))fs.unlink(path.join(itemDir(it.id),p),()=>{});
+  const updated=(await pool.query("UPDATE wall_items SET file_name=$2,mime=$3,size_bytes=$4,kind=$5,pages=0,error='',status=$6 WHERE id=$1 RETURNING *",[it.id,fileName,req.file.mimetype||'',req.file.size,kind,['video','audio','other'].includes(kind)?'ready':'processing'])).rows[0];
+  if(updated.status==='processing')enqueue(it.id);
+  res.json({ok:true,item:itemView(req,updated)});
+ }catch(e){if(req.file)fs.unlink(req.file.path,()=>{});next(e)}}));
  app.get('/api/wall/items/:id',loadItem,loadBoard,wrap(async(req,res)=>{const it=req.item;if(!canSee(req,it))throw fail('العمل غير متاح.',404);const [row]=(await pool.query(`SELECT i.*,(SELECT count(*) FROM wall_reactions r WHERE r.item_id=i.id AND r.kind='like') AS likes,(SELECT count(*) FROM wall_reactions r WHERE r.item_id=i.id AND r.kind='idea') AS ideas,(SELECT count(*) FROM wall_comments c WHERE c.item_id=i.id) AS comment_count FROM wall_items i WHERE i.id=$1`,[it.id])).rows;res.json({item:itemView(req,row)})}));
  const safeInline=/^(image\/|video\/|audio\/)|^application\/pdf$/;
  const sendFile=(res,file,headers)=>{const h={'X-Content-Type-Options':'nosniff',...headers};if(!safeInline.test(String(h['Content-Type']||'')))h['Content-Security-Policy']='sandbox';res.set(h);res.sendFile(file,{dotfiles:'deny',maxAge:'1h'})};
@@ -166,13 +219,37 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
  app.post('/api/wall/items/:id/approve',loadItem,loadBoard,ownerOnly,wrap(async(req,res)=>{await pool.query('UPDATE wall_items SET approved=$2 WHERE id=$1',[req.item.id,req.body?.approved!==false]);res.json({ok:true})}));
  app.post('/api/wall/items/:id/retry',loadItem,loadBoard,ownerOnly,wrap(async(req,res)=>{await pool.query("UPDATE wall_items SET status='processing',error='' WHERE id=$1",[req.item.id]);enqueue(req.item.id);res.json({ok:true})}));
  app.post('/api/wall/items/:id/react',loadItem,loadBoard,memberOnly,wrap(async(req,res)=>{if(!req.board.settings.reactions)throw fail('التفاعل متوقف في هذه اللوحة.',409);const kind=req.body?.kind==='idea'?'idea':'like';const del=await pool.query('DELETE FROM wall_reactions WHERE item_id=$1 AND member_id=$2 AND kind=$3',[req.item.id,req.member.id,kind]);if(!del.rowCount)await pool.query('INSERT INTO wall_reactions(item_id,member_id,kind) VALUES($1,$2,$3)',[req.item.id,req.member.id,kind]);const c=(await pool.query("SELECT count(*) FILTER(WHERE kind='like') AS likes,count(*) FILTER(WHERE kind='idea') AS ideas FROM wall_reactions WHERE item_id=$1",[req.item.id])).rows[0];res.json({kind,active:!del.rowCount,likes:Number(c.likes),ideas:Number(c.ideas)})}));
- const commentView=(req,c)=>({id:c.id,author:c.author_name,body:c.body,imageUrl:c.image_name?`/wall/comments/${c.id}/image`:null,createdAt:c.created_at,mine:!!(req.member&&req.member.id===c.member_id)});
- app.get('/api/wall/items/:id/comments',loadItem,loadBoard,wrap(async(req,res)=>{if(!canSee(req,req.item))throw fail('العمل غير متاح.',404);const rows=(await pool.query('SELECT * FROM wall_comments WHERE item_id=$1 ORDER BY created_at LIMIT 300',[req.item.id])).rows;res.json({comments:rows.map(c=>commentView(req,c))})}));
+ const commentView=(req,c)=>({id:c.id,parent:c.parent_id||null,author:c.author_name,body:c.body,imageUrl:c.image_name?`/wall/comments/${c.id}/image`:null,createdAt:c.created_at,mine:!!(req.member&&req.member.id===c.member_id),reactions:{like:Number(c.r_like||0),logical:Number(c.r_logical||0),creative:Number(c.r_creative||0)},my:{like:!!c.my_like,logical:!!c.my_logical,creative:!!c.my_creative}});
+ app.get('/api/wall/items/:id/comments',loadItem,loadBoard,wrap(async(req,res)=>{if(!canSee(req,req.item))throw fail('العمل غير متاح.',404);
+  const mid=req.member?.id||null;
+  const rows=(await pool.query(`SELECT c.*,
+    (SELECT count(*) FROM wall_comment_reactions r WHERE r.comment_id=c.id AND r.kind='like') AS r_like,
+    (SELECT count(*) FROM wall_comment_reactions r WHERE r.comment_id=c.id AND r.kind='logical') AS r_logical,
+    (SELECT count(*) FROM wall_comment_reactions r WHERE r.comment_id=c.id AND r.kind='creative') AS r_creative,
+    EXISTS(SELECT 1 FROM wall_comment_reactions r WHERE r.comment_id=c.id AND r.kind='like' AND r.member_id=$2) AS my_like,
+    EXISTS(SELECT 1 FROM wall_comment_reactions r WHERE r.comment_id=c.id AND r.kind='logical' AND r.member_id=$2) AS my_logical,
+    EXISTS(SELECT 1 FROM wall_comment_reactions r WHERE r.comment_id=c.id AND r.kind='creative' AND r.member_id=$2) AS my_creative
+    FROM wall_comments c WHERE c.item_id=$1 ORDER BY c.created_at LIMIT 400`,[req.item.id,mid])).rows;
+  const map=new Map(),top=[];for(const r of rows){const v=commentView(req,r);v.replies=[];map.set(v.id,v)}
+  for(const v of map.values()){if(v.parent&&map.has(v.parent))map.get(v.parent).replies.push(v);else top.push(v)}
+  res.json({comments:top})}));
  app.post('/api/wall/items/:id/comments',loadItem,loadBoard,memberOnly,(req,res,next)=>commentUploader(req,res,async uploadError=>{try{
   if(uploadError)throw fail('تعذّر رفع صورة التعليق (الحد 6 ميغابايت).');if(!req.board.settings.comments)throw fail('التعليقات متوقفة في هذه اللوحة.',409);if(!canSee(req,req.item))throw fail('العمل غير متاح.',404);
   const body=text(req.body?.body||'',maxComment);if(!body&&!req.file)throw fail('اكتب تعليقًا أو أرفق صورة.');limit('comment:'+ipOf(req),300);
-  const c=(await pool.query('INSERT INTO wall_comments(item_id,member_id,author_name,body,image_name) VALUES($1,$2,$3,$4,$5) RETURNING *',[req.item.id,req.member.id,req.member.name,body,req.file?.filename||''])).rows[0];res.status(201).json({comment:commentView(req,c)});
+  let parent=null;if(req.body?.parent){if(!uuid.test(req.body.parent))throw fail('التعليق غير موجود.',404);const p=(await pool.query('SELECT id,parent_id,item_id FROM wall_comments WHERE id=$1',[req.body.parent])).rows[0];if(!p||p.item_id!==req.item.id)throw fail('التعليق غير موجود.',404);parent=p.parent_id||p.id}
+  const c=(await pool.query('INSERT INTO wall_comments(item_id,member_id,author_name,body,image_name,parent_id) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[req.item.id,req.member.id,req.member.name,body,req.file?.filename||'',parent])).rows[0];c.replies=[];res.status(201).json({comment:{...commentView(req,c),replies:[]}});
  }catch(e){if(req.file)fs.unlink(req.file.path,()=>{});next(e)}}));
+ app.post('/api/wall/comments/:cid/react',wrap(async(req,res)=>{
+  if(!uuid.test(req.params.cid))throw fail('غير موجود.',404);
+  const c=(await pool.query('SELECT c.id,i.board_id,b.settings FROM wall_comments c JOIN wall_items i ON i.id=c.item_id JOIN wall_boards b ON b.id=i.board_id WHERE c.id=$1',[req.params.cid])).rows[0];
+  if(!c)throw fail('غير موجود.',404);if(!publicSettings(c.settings).comments)throw fail('التعليقات متوقفة.',409);
+  const t=req.get('X-Wall-Member')||'';const member=keyPattern.test(t)?(await pool.query('SELECT id FROM wall_members WHERE token_hash=$1 AND board_id=$2',[hash(t),c.board_id])).rows[0]:null;
+  if(!member)throw fail('ادخل باسمك أولًا.',401);
+  const kind=['logical','creative'].includes(req.body?.kind)?req.body.kind:'like';
+  const del=await pool.query('DELETE FROM wall_comment_reactions WHERE comment_id=$1 AND member_id=$2 AND kind=$3',[c.id,member.id,kind]);
+  if(!del.rowCount)await pool.query('INSERT INTO wall_comment_reactions(comment_id,member_id,kind) VALUES($1,$2,$3)',[c.id,member.id,kind]);
+  const n=(await pool.query("SELECT count(*) FILTER(WHERE kind='like') AS l,count(*) FILTER(WHERE kind='logical') AS g,count(*) FILTER(WHERE kind='creative') AS v FROM wall_comment_reactions WHERE comment_id=$1",[c.id])).rows[0];
+  res.json({kind,active:!del.rowCount,reactions:{like:Number(n.l),logical:Number(n.g),creative:Number(n.v)}})}));
  app.get('/api/wall/comments/:cid/image',wrap(async(req,res)=>{if(!uuid.test(req.params.cid))throw fail('غير موجود.',404);const c=(await pool.query('SELECT item_id,image_name FROM wall_comments WHERE id=$1',[req.params.cid])).rows[0];if(!c?.image_name||!/^c-[-a-f0-9]+\.(png|jpg|webp|gif|img)$/.test(c.image_name))throw fail('غير موجود.',404);sendFile(res,path.join(itemDir(c.item_id),c.image_name),{'Content-Type':{png:'image/png',jpg:'image/jpeg',webp:'image/webp',gif:'image/gif'}[c.image_name.split('.').pop()]||'application/octet-stream'})}));
  app.delete('/api/wall/comments/:cid',wrap(async(req,res)=>{if(!uuid.test(req.params.cid))throw fail('غير موجود.',404);const c=(await pool.query('SELECT c.*,b.owner_key_hash,b.id AS board_id FROM wall_comments c JOIN wall_items i ON i.id=c.item_id JOIN wall_boards b ON b.id=i.board_id WHERE c.id=$1',[req.params.cid])).rows[0];if(!c)throw fail('غير موجود.',404);const owner=keyPattern.test(req.get('X-Wall-Key')||'')&&hash(req.get('X-Wall-Key'))===c.owner_key_hash;const t=req.get('X-Wall-Member')||'';const member=keyPattern.test(t)?(await pool.query('SELECT id FROM wall_members WHERE token_hash=$1 AND board_id=$2',[hash(t),c.board_id])).rows[0]:null;if(!(owner||(member&&member.id===c.member_id)))throw fail('لا تملك صلاحية حذف هذا التعليق.',403);await pool.query('DELETE FROM wall_comments WHERE id=$1',[c.id]);if(c.image_name)fs.unlink(path.join(itemDir(c.item_id),c.image_name),()=>{});res.json({ok:true})}));
  return {resumeProcessing,processItem,enqueue};

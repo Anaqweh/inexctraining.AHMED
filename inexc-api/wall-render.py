@@ -141,7 +141,47 @@ def office_to_pdf(src, original_name, tmp):
         raise RuntimeError("تعذّر تحويل الملف إلى PDF")
     return pdf
 
+def export_album(manifest_path, out_path):
+    """ألبوم اللوحة: غلاف بهوية التميز ثم كل صفحات الأعمال المختومة في PDF واحد."""
+    with open(manifest_path, encoding="utf-8") as f:
+        manifest = json.load(f)
+    width = 1000
+    def cover():
+        im = Image.new("RGB", (width, int(width * 1.414)), (13, 70, 137))
+        d = ImageDraw.Draw(im)
+        d.rectangle([0, 0, width, 8], fill=(201, 154, 46))
+        d.rectangle([0, im.height - 8, width, im.height], fill=(201, 154, 46))
+        big = font(ARABIC_BOLD, 54); mid = font(ARABIC_REG, 30); small = font(LATIN, 22)
+        draw_text(d, (width // 2, int(im.height * 0.34)), "ألبوم حائط الأعمال", mid, (205, 226, 255), anchor="mm")
+        title = str(manifest.get("title") or "")[:60]
+        draw_text(d, (width // 2, int(im.height * 0.44)), title, big, (255, 255, 255), anchor="mm")
+        n = len(manifest.get("items") or [])
+        draw_text(d, (width // 2, int(im.height * 0.56)), f"{n} عملًا مختومًا بتوقيع التميز", mid, (244, 200, 106), anchor="mm")
+        draw_text(d, (width // 2, int(im.height * 0.66)), "شركة التميز الابتكاري", mid, (255, 255, 255), anchor="mm")
+        draw_text(d, (width // 2, int(im.height * 0.72)), "INEXC TRAINING · inexctraining.com", small, (156, 196, 244), anchor="mm", rtl=False)
+        return im
+    def pages():
+        total = 0
+        for it in manifest.get("items") or []:
+            for i in range(1, int(it.get("pages") or 0) + 1):
+                f = os.path.join(it["dir"], f"page-{i:03d}.png")
+                if not os.path.exists(f):
+                    continue
+                total += 1
+                if total > 500:
+                    return
+                img = Image.open(f).convert("RGB")
+                if img.width > width:
+                    img = img.resize((width, max(1, round(img.height * width / img.width))), Image.LANCZOS)
+                yield img
+    first = cover()
+    first.save(out_path, "PDF", save_all=True, append_images=pages(), resolution=96)
+    print("EXPORT=ok")
+
 def main():
+    if sys.argv[1] == "export":
+        export_album(sys.argv[2], sys.argv[3])
+        return
     src, out_dir, kind, meta_json = sys.argv[1:5]
     original_name = sys.argv[5] if len(sys.argv) > 5 else ""
     meta = json.loads(meta_json) if meta_json and meta_json != "null" else None
