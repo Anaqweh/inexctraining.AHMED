@@ -165,12 +165,20 @@ export function installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailE
   limit('bmail:'+req.board.id,20);const note=text(req.body?.note||'',500);
   let targets=[];
   if(req.body?.recipients==='all'){targets=(await pool.query("SELECT DISTINCT email FROM wall_members WHERE board_id=$1 AND email<>''",[req.board.id])).rows.map(r=>r.email)}
+  else if(req.body?.recipients==='online'){targets=(await pool.query("SELECT DISTINCT email FROM wall_members WHERE board_id=$1 AND email<>'' AND last_seen_at>now()-interval '10 minutes'",[req.board.id])).rows.map(r=>r.email)}
   else{const list=Array.isArray(req.body?.emails)?req.body.emails:[];targets=[...new Set(list.map(e=>String(e||'').trim().toLowerCase()).filter(e=>emailPattern.test(e)))].slice(0,100)}
-  if(!targets.length)throw fail('لا يوجد مستلمون. تأكد من الإيميلات أو من دخول متدربين باللوحة.');
+  if(!targets.length)throw fail(req.body?.recipients==='online'?'لا يوجد متدربون حاضرون الآن (دخلوا خلال آخر ١٠ دقائق).':'لا يوجد مستلمون. تأكد من الإيميلات أو من دخول متدربين باللوحة.');
+  let item=null;
+  if(req.body?.itemId){if(!uuid.test(req.body.itemId))throw fail('العمل غير موجود.',404);item=(await pool.query("SELECT id,title,author_name FROM wall_items WHERE id=$1 AND board_id=$2 AND status='ready'",[req.body.itemId,req.board.id])).rows[0];if(!item)throw fail('العمل غير موجود أو غير جاهز.',404)}
   const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const works=(await pool.query("SELECT i.title,i.author_name,i.id,m.email FROM wall_items i LEFT JOIN wall_members m ON m.id=i.member_id WHERE i.board_id=$1 AND i.status='ready' AND i.pages>0 ORDER BY i.created_at",[req.board.id])).rows;
   let sentCount=0;
   for(const to of targets){
+   if(item){
+    const content=`<div style="font-size:21px;font-weight:800;color:#103b70">عمل من لوحة «${esc(req.board.title)}»</div><p style="font-size:15px;margin:12px 0 0"><strong>${esc(item.title)}</strong> — ${esc(item.author_name)}</p>${note?`<p style="font-size:14px;margin:10px 0 0">${esc(note)}</p>`:''}<div style="margin:16px 0;text-align:center"><a href="${origin}/wall/?b=${req.board.code}&w=${item.id}" style="display:inline-block;background:#0866c6;color:#fff;text-decoration:none;padding:11px 20px;border-radius:9px;font-size:14px;font-weight:700">مشاهدة العمل المختوم</a></div>`;
+    try{await sendEmail({to,subject:`${item.title} — من لوحة «${req.board.title}»`,html:emailShell?emailShell({title:'حائط الأعمال',preview:item.title,content}):content,text:`${origin}/wall/?b=${req.board.code}&w=${item.id}`});sentCount++}catch(e){console.error(e)}
+    continue;
+   }
    const mine=works.filter(w=>w.email===to);
    const mineHtml=mine.length?`<p style="font-size:14px;margin:14px 0 4px"><strong>أعمالك المختومة بتوقيع التميز:</strong></p>`+mine.map(w=>`<p style="margin:4px 0;font-size:14px">• <a href="${origin}/wall/?b=${req.board.code}&w=${w.id}">${esc(w.title)}</a></p>`).join(''):'';
    const content=`<div style="font-size:21px;font-weight:800;color:#103b70">ملفات لوحة «${esc(req.board.title)}»</div>${note?`<p style="font-size:15px;margin:12px 0 0">${esc(note)}</p>`:''}<p style="font-size:14px;margin:14px 0 0">جميع أعمال الدفعة معروضة ومختومة على الحائط:</p><div style="margin:14px 0;text-align:center"><a href="${boardUrl(req.board.code)}" style="display:inline-block;background:#0866c6;color:#fff;text-decoration:none;padding:11px 20px;border-radius:9px;font-size:14px;font-weight:700">فتح حائط الأعمال</a></div>${mineHtml}`;

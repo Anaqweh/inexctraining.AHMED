@@ -8,9 +8,9 @@
 <title>حائط الأعمال | INEXC Training</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&display=swap">
-<link rel="stylesheet" href="/wall/wall.css?v=20261107-9">
+<link rel="stylesheet" href="/wall/wall.css?v=20261107-10">
 <script defer src="/inexc-registration-config.js"></script>
-<script defer src="/wall/wall.js?v=20261107-9"></script>
+<script defer src="/wall/wall.js?v=20261107-10"></script>
 <meta property="og:type" content="website">
 <meta property="og:title" content="حائط الأعمال | INEXC Training">
 <link rel="icon" href="/assets/inexc-icon.png" type="image/png">
@@ -64,7 +64,7 @@
       <div class="admin-row" id="a-groups-row" hidden><span>المجموعات:</span><input id="a-groups-names" maxlength="400" placeholder="افصل بين الأسماء بفاصلة"><button id="a-groups-save">حفظ المجموعات</button></div>
       <div class="admin-row"><span>أدوات:</span><button id="a-present">▶ اعرض على الشاشة</button><button id="a-export">تصدير اللوحة PDF</button></div>
       <div class="admin-row"><span>قفل الرفع:</span><input id="a-lock" type="datetime-local" style="flex:0 1 auto;min-width:0"><button id="a-lock-save">تفعيل القفل</button><button id="a-lock-clear" hidden>إلغاء القفل</button></div>
-      <div class="admin-row" style="align-items:flex-start"><span>إرسال بالبريد:</span><div style="flex:1;min-width:240px;display:grid;gap:8px"><div class="seg"><button id="m-all" aria-pressed="true">جميع المسجلين</button><button id="m-custom" aria-pressed="false">إيميلات محددة</button></div><input id="m-emails" hidden placeholder="افصل بين الإيميلات بفاصلة"><input id="m-note" maxlength="500" placeholder="رسالة قصيرة تظهر في البريد (اختياري)"><button class="primary" id="m-send" style="justify-self:start">إرسال روابط الملفات</button></div></div>
+      <div class="admin-row"><span>إرسال بالبريد:</span><button id="a-mail">✉ إرسال روابط اللوحة والملفات</button></div>
       <div class="admin-row"><span>العنوان:</span><input id="a-title" maxlength="120"><button id="a-title-save">حفظ العنوان</button></div>
       <div class="admin-row qr"><img id="a-qr" alt="رمز QR للوحة"><div><div class="share"><code id="a-link"></code><button id="a-copy">نسخ رابط المتدربين</button></div><p class="hint" style="margin-top:8px">رابط الإدارة الذي وصلك بالبريد يبقى سريًا؛ هذا رابط المشاركة فقط. بريد المدير: <span id="a-email" dir="ltr"></span></p></div></div>
     </section>
@@ -105,7 +105,7 @@
   <div class="v-head">
     <button id="v-close">✕ إغلاق</button>
     <b id="v-owner" class="v-owner"></b>
-    <div class="v-actions"><button id="v-fs">⛶ شاشة كاملة</button><button id="v-link">نسخ رابط العمل</button><button id="v-dl" hidden>تنزيل بختم التميز (PDF)</button><button id="v-orig" hidden>الملف الأصلي</button><button id="v-replace" hidden>استبدال الملف</button><input id="v-replace-file" type="file" hidden><button id="v-approve" hidden>✓ اعتماد الظهور</button><button id="v-del" class="danger" hidden>حذف</button></div>
+    <div class="v-actions"><button id="v-fs">⛶ شاشة كاملة</button><button id="v-present" hidden>▶ اعرضه على الشاشة</button><button id="v-send" hidden>✉ إرسال</button><button id="v-link">نسخ رابط العمل</button><button id="v-dl" hidden>تنزيل بختم التميز (PDF)</button><button id="v-orig" hidden>الملف الأصلي</button><button id="v-replace" hidden>استبدال الملف</button><input id="v-replace-file" type="file" hidden><button id="v-approve" hidden>✓ اعتماد الظهور</button><button id="v-del" class="danger" hidden>حذف</button></div>
   </div>
   <div class="v-stage" id="v-stage"></div>
   <div class="v-social" id="v-social">
@@ -118,6 +118,16 @@
     <div class="v-who"><b id="v-title"></b><small id="v-by"></small></div>
     <div class="v-nav" id="v-nav"><button id="v-prev" aria-label="العمل السابق">‹</button><span id="v-count"></span><button id="v-next" aria-label="العمل التالي">›</button></div>
   </div>
+</dialog>
+<dialog id="send-dialog" aria-labelledby="send-title">
+  <form class="join" id="send-form">
+    <h3 id="send-title">إرسال بالبريد</h3><p class="sub" id="send-what"></p>
+    <div class="seg" style="margin:0 0 14px;width:100%"><button type="button" id="s-all" aria-pressed="true">جميع المسجلين</button><button type="button" id="s-online" aria-pressed="false">الحاضرون الآن</button><button type="button" id="s-custom" aria-pressed="false">إيميل محدد</button></div>
+    <label id="s-emails-wrap" hidden>الإيميل — أو عدة إيميلات بفواصل<input id="s-emails" dir="ltr" placeholder="name@example.com"></label>
+    <label>رسالة قصيرة تظهر في البريد (اختياري)<input id="s-note" maxlength="500"></label>
+    <button class="primary join-go" id="s-go" type="submit">إرسال ←</button>
+    <p class="hint">«الحاضرون الآن»: من فتحوا اللوحة خلال آخر ١٠ دقائق.</p>
+  </form>
 </dialog>
 <div id="show" hidden><button id="sh-exit">✕ إنهاء العرض</button><div id="sh-stage"></div><div id="sh-foot"><b id="sh-name"></b><span id="sh-title"></span><span id="sh-count"></span><button id="sh-prev">‹</button><button id="sh-pause">⏸</button><button id="sh-next">›</button></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
