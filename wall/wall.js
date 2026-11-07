@@ -77,8 +77,12 @@ function cardEl(it,idx){
  const badge=it.status==='processing'?'<span class="badge warn">جارٍ تجهيز الصفحات…</span>':it.status==='failed'?'<span class="badge bad">تعذّر تحويل الملف</span>':!it.approved?'<span class="badge warn">بانتظار اعتماد المدير</span>':'';
  const top=state.topId===it.id?'<span class="badge star">الأكثر إعجابًا</span>':'';
  const no=String(state.board.items.length-state.board.items.indexOf(it)).padStart(2,'0');
+ const tools=state.board.isOwner&&it.status==='ready'&&it.pages>0?`<div class="ctools"><button type="button" data-act="present">▶ اعرضه على الشاشة</button><button type="button" data-act="send">✉ إرسال</button></div>`:'';
  el.innerHTML=`<div class="thumb">${thumb}<span class="open">افتح العمل</span></div>${badge||top||(it.mine?'<span class="badge me">عملك</span>':'')}<span class="no" dir="ltr">№ ${no}</span><div class="meta"><b>${esc(it.author)}</b><span class="ttl"><bdi>${esc(it.title)}</bdi></span><small><span>${metaOf(it)}</span><span>👍 ${it.likes} &nbsp; 💬 ${it.comments}</span></small></div>`;
- el.addEventListener('click',()=>openViewer(idx));el.addEventListener('keydown',e=>{if(e.key==='Enter')openViewer(idx)});return el;
+ el.insertAdjacentHTML('beforeend',tools);
+ el.querySelector('[data-act="present"]')?.addEventListener('click',e=>{e.stopPropagation();startShow(it)});
+ el.querySelector('[data-act="send"]')?.addEventListener('click',e=>{e.stopPropagation();openSend(it)});
+ el.addEventListener('click',()=>openViewer(idx));el.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target===el)openViewer(idx)});return el;
 }
 async function downloadFile(url,filename){
  try{say('جارٍ تجهيز التنزيل…',8000);const r=await fetch(API+url,{headers:headers()});if(!r.ok)throw 0;
@@ -113,17 +117,11 @@ function renderAdmin(){
  $('a-qr').src=`${API}/wall/boards/${code}/qr`;$('a-link').textContent=b.url;$('a-email').textContent=b.ownerEmail||'';
 }
 function initAdmin(){
- $('a-present').addEventListener('click',startShow);
+ $('a-present').addEventListener('click',()=>startShow());
  $('a-export').addEventListener('click',()=>downloadFile(`/wall/boards/${code}/export.pdf`,`${state.board.title} - الألبوم.pdf`));
+ $('a-mail').addEventListener('click',()=>openSend(null));
  $('a-lock-save').addEventListener('click',()=>{const v=$('a-lock').value;if(!v)return say('اختر التاريخ والوقت أولًا');patch({lockAt:new Date(v).toISOString()})});
  $('a-lock-clear').addEventListener('click',()=>patch({lockAt:null}));
- let mMode='all';const seg=m=>{mMode=m;$('m-all').setAttribute('aria-pressed',String(m==='all'));$('m-custom').setAttribute('aria-pressed',String(m==='custom'));$('m-emails').hidden=m!=='custom'};
- $('m-all').addEventListener('click',()=>seg('all'));$('m-custom').addEventListener('click',()=>seg('custom'));
- $('m-send').addEventListener('click',async()=>{
-  const body={recipients:mMode==='all'?'all':'list',note:$('m-note').value.trim()};
-  if(mMode==='custom')body.emails=$('m-emails').value.split(/[،,;\s]+/).filter(Boolean);
-  $('m-send').disabled=true;
-  try{const r=await api(`/wall/boards/${code}/email`,{method:'POST',body});say(`✓ أُرسل البريد إلى ${r.sent} من ${r.total}`,5000)}catch(err){say(err.message,5000)}finally{$('m-send').disabled=false}});
 
  $('a-single').addEventListener('click',()=>patch({mode:'single'}));
  for(const k of ['groups','both'])$('a-'+k).addEventListener('click',()=>{const groups=$('a-groups-names').value.split(/[،,\n]/).map(s=>s.trim()).filter(Boolean);patch({mode:k,groups:groups.length>=2?groups:undefined})});
@@ -212,10 +210,21 @@ $('v-link').addEventListener('click',async()=>{const link=`${location.origin}/wa
 $('v-del').addEventListener('click',async e=>{const it=current();if(e.currentTarget.dataset.arm!==it.id){e.currentTarget.dataset.arm=it.id;e.currentTarget.textContent='تأكيد الحذف؟';setTimeout(()=>{if($('v-del').dataset.arm===it.id){$('v-del').dataset.arm='';$('v-del').textContent='حذف'}},4000);return}try{await api('/wall/items/'+it.id,{method:'DELETE'});vw.close();say('حُذف العمل');load()}catch(err){say(err.message,4000)}});
 $('v-approve').addEventListener('click',async()=>{const it=current();try{await api(`/wall/items/${it.id}/approve`,{method:'POST',body:{approved:true}});it.approved=true;say('✓ اعتُمد العمل وصار ظاهرًا للجميع');paintViewer();load()}catch(err){say(err.message,4000)}});
 
+/* ——— حوار الإرسال ——— */
+const sd=$('send-dialog');let sendItem=null,sMode='all';
+function sSeg(m){sMode=m;for(const k of ['all','online','custom'])$('s-'+k).setAttribute('aria-pressed',String(m===k));$('s-emails-wrap').hidden=m!=='custom'}
+for(const k of ['all','online','custom'])$('s-'+k).addEventListener('click',()=>sSeg(k));
+function openSend(it){sendItem=it||null;$('send-what').textContent=sendItem?`${sendItem.title} — ${sendItem.author}`:state.board.title+' (روابط اللوحة وملفات كل متدرب)';sSeg('all');$('s-emails').value='';$('s-note').value='';sd.showModal()}
+sd.addEventListener('click',e=>{if(e.target===sd)sd.close()});
+$('send-form').addEventListener('submit',async e=>{
+ e.preventDefault();const body={recipients:sMode==='custom'?'list':sMode,note:$('s-note').value.trim()};
+ if(sMode==='custom'){body.emails=$('s-emails').value.split(/[،,;\s]+/).filter(Boolean);if(!body.emails.length)return say('اكتب الإيميل أولًا')}
+ if(sendItem)body.itemId=sendItem.id;$('s-go').disabled=true;
+ try{const r=await api(`/wall/boards/${code}/email`,{method:'POST',body});sd.close();say(`✓ أُرسل إلى ${r.sent} من ${r.total}`,5000)}catch(err){say(err.message,5000)}finally{$('s-go').disabled=false}});
 /* ——— العرض على الشاشة ——— */
 let shIdx=0,shTimer=null,shPaused=false;
 const shItems=()=>state.items.filter(i=>i.status==='ready'&&i.pages>0);
-function startShow(){if(!shItems().length)return say('لا أعمال جاهزة للعرض بعد');shIdx=0;shPaused=false;$('show').hidden=false;try{$('show').requestFullscreen?.()}catch{}paintShow();shLoop()}
+function startShow(fromItem){const list=shItems();if(!list.length)return say('لا أعمال جاهزة للعرض بعد');shIdx=fromItem?Math.max(0,list.findIndex(x=>x.id===fromItem.id)):0;shPaused=false;$('show').hidden=false;try{$('show').requestFullscreen?.()}catch{}paintShow();shLoop()}
 function shLoop(){clearInterval(shTimer);shTimer=setInterval(()=>{if(!shPaused){shIdx=(shIdx+1)%shItems().length;paintShow()}},8000)}
 function paintShow(){const list=shItems();const it=list[shIdx];if(!it)return endShow();
  $('show').classList.remove('fade');void $('show').offsetWidth;$('show').classList.add('fade');
