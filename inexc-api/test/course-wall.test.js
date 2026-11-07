@@ -44,10 +44,10 @@ test('a board is created by anyone, its admin key arrives by email only, trainee
  const asOwner=await api('/api/wall/boards/'+code,'GET',undefined,owner);assert.equal(asOwner.data.isOwner,true);assert.equal(asOwner.data.ownerEmail,'owner@example.com');
  assert.equal((await api('/api/wall/boards/'+code,'PATCH',{title:'x'})).status,403);
  const both=await api('/api/wall/boards/'+code,'PATCH',{mode:'both',groups:['أ','ب','ج']},owner);assert.equal(both.data.mode,'both');
- const solo=await api('/api/wall/boards/'+code+'/join','POST',{name:'منفرد',group:-1});assert.equal(solo.data.me.group,-1);
- assert.equal((await api('/api/wall/boards/'+code+'/join','POST',{name:'ضمن',group:2})).data.me.group,2);
+ const solo=await api('/api/wall/boards/'+code+'/join','POST',{name:'منفرد',email:'solo@example.com',group:-1});assert.equal(solo.data.me.group,-1);
+ assert.equal((await api('/api/wall/boards/'+code+'/join','POST',{name:'ضمن',email:'in@example.com',group:2})).data.me.group,2);
  const patched=await api('/api/wall/boards/'+code,'PATCH',{mode:'groups',groups:['أ','ب'],settings:{comments:false,nope:true}},owner);assert.equal(patched.status,200);assert.equal(patched.data.mode,'groups');assert.deepEqual(patched.data.groups,['أ','ب']);assert.equal(patched.data.settings.comments,false);
- const joined=await api('/api/wall/boards/'+code+'/join','POST',{name:'سارة',group:1});assert.equal(joined.status,201);assert.equal(joined.data.me.group,1);const member={'X-Wall-Member':joined.data.token};
+ const joined=await api('/api/wall/boards/'+code+'/join','POST',{name:'سارة',email:'sara@example.com',group:1});assert.equal(joined.status,201);assert.equal(joined.data.me.group,1);const member={'X-Wall-Member':joined.data.token};
  const me=await api('/api/wall/boards/'+code,'GET',undefined,member);assert.deepEqual(me.data.me,{id:joined.data.me.id,name:'سارة',group:1});assert.equal(me.data.members,3);
  // رفع صورة → تُحوَّل إلى صفحة مختومة
  const up=await api('/api/wall/boards/'+code+'/items','POST',form({title:'لوحتي',group:'1'},{field:'file',data:png1x1,type:'image/png',name:'لوحة.png'}),member);
@@ -71,7 +71,7 @@ test('a board is created by anyone, its admin key arrives by email only, trainee
  const board=await api('/api/wall/boards/'+code,'GET',undefined,member);assert.equal(board.data.items[0].comments,1);
  // الموافقة المسبقة: العمل الجديد لا يراه الآخرون حتى يوافق المدير
  await api('/api/wall/boards/'+code,'PATCH',{settings:{requireApproval:true}},owner);
- const other=(await api('/api/wall/boards/'+code+'/join','POST',{name:'زائر'})).data;const otherH={'X-Wall-Member':other.token};
+ const other=(await api('/api/wall/boards/'+code+'/join','POST',{name:'زائر',email:'visitor@example.com'})).data;const otherH={'X-Wall-Member':other.token};
  const pending=await api('/api/wall/boards/'+code+'/items','POST',form({},{field:'file',data:Buffer.from('مرحبا'),type:'text/plain',name:'ملاحظة.txt'}),otherH);assert.equal(pending.data.item.approved,false);
  assert.equal((await api('/api/wall/boards/'+code,'GET',undefined,member)).data.items.some(i=>i.id===pending.data.item.id),false);
  assert.equal((await api('/api/wall/boards/'+code,'GET',undefined,otherH)).data.items.some(i=>i.id===pending.data.item.id),true);
@@ -79,16 +79,51 @@ test('a board is created by anyone, its admin key arrives by email only, trainee
  await api(`/api/wall/items/${pending.data.item.id}/approve`,'POST',{approved:true},owner);
  assert.equal((await api('/api/wall/boards/'+code,'GET',undefined,member)).data.items.some(i=>i.id===pending.data.item.id),true);
  await waitReady(api,code,pending.data.item.id,owner);
+ // الدخول يتطلب بريدًا صحيحًا
+ assert.equal((await api('/api/wall/boards/'+code+'/join','POST',{name:'بلا بريد'})).status,400);
+ assert.equal((await api('/api/wall/boards/'+code+'/join','POST',{name:'س',email:'ليس-بريدًا'})).status,400);
+ // رد على تعليق + تفاعلات التعليق
+ const base=(await api(`/api/wall/items/${ready.id}/comments`,'POST',form({body:'تعليق أصلي'}),member)).data.comment;
+ const reply=await api(`/api/wall/items/${ready.id}/comments`,'POST',form({body:'رد عليه',parent:base.id}),otherH);
+ assert.equal(reply.status,201);assert.equal(reply.data.comment.parent,base.id);
+ const nested=await api(`/api/wall/items/${ready.id}/comments`,'POST',form({body:'رد على الرد',parent:reply.data.comment.id}),member);
+ assert.equal(nested.data.comment.parent,base.id); // مستوى واحد فقط
+ const cr=await api(`/api/wall/comments/${base.id}/react`,'POST',{kind:'creative'},otherH);
+ assert.deepEqual(cr.data.reactions,{like:0,logical:0,creative:1});
+ assert.equal((await api(`/api/wall/comments/${base.id}/react`,'POST',{kind:'creative'},otherH)).data.reactions.creative,0);
+ await api(`/api/wall/comments/${base.id}/react`,'POST',{kind:'logical'},otherH);
+ const tree=(await api(`/api/wall/items/${ready.id}/comments`,'GET',undefined,otherH)).data.comments;
+ const found=tree.find(x=>x.id===base.id);assert.equal(found.replies.length,2);assert.equal(found.reactions.logical,1);assert.equal(found.my.logical,true);
+ // استبدال الملف يحافظ على التفاعل ويعيد المعالجة
+ assert.equal((await api(`/api/wall/items/${ready.id}/replace`,'POST',form({},{field:'file',data:Buffer.from('نسخة محسنة'),type:'text/plain',name:'تحسين.txt'}),otherH)).status,403);
+ const rep=await api(`/api/wall/items/${ready.id}/replace`,'POST',form({},{field:'file',data:Buffer.from('نسخة محسنة من العمل'),type:'text/plain',name:'تحسين.txt'}),member);
+ assert.equal(rep.status,200);assert.equal(rep.data.item.kind,'text');
+ const ready2=await waitReady(api,code,ready.id,member);assert.equal(ready2.pages,1);assert.ok(ready2.likes>=0);
+ // قفل الرفع بموعد
+ await api('/api/wall/boards/'+code,'PATCH',{lockAt:new Date(Date.now()-60000).toISOString()},owner);
+ assert.equal((await api('/api/wall/boards/'+code+'/items','POST',form({},{field:'file',data:png1x1,type:'image/png',name:'late.png'}),member)).status,409);
+ await api('/api/wall/boards/'+code,'PATCH',{lockAt:null},owner);
+ assert.equal((await api('/api/wall/boards/'+code)).data.lockAt,null);
+ // تصدير الألبوم PDF للمدير فقط
+ assert.equal((await api('/api/wall/boards/'+code+'/export.pdf')).status,403);
+ const album=await api('/api/wall/boards/'+code+'/export.pdf','GET',undefined,owner);
+ assert.equal(album.status,200);assert.equal(album.headers.get('content-type'),'application/pdf');assert.ok(album.data.slice(0,4).toString()==='%PDF');
+ // بريد اللوحة: للجميع وبقائمة محددة
+ sent.length=0;
+ const mailAll=await api('/api/wall/boards/'+code+'/email','POST',{recipients:'all',note:'شكرًا لمشاركتكم'},owner);
+ assert.equal(mailAll.data.sent>=2,true);assert.ok(sent.some(m=>m.to==='sara@example.com'));
+ const mailList=await api('/api/wall/boards/'+code+'/email','POST',{recipients:'list',emails:['one@example.com','bad','one@example.com']},owner);
+ assert.deepEqual({sent:mailList.data.sent,total:mailList.data.total},{sent:1,total:1});
  // الحذف: صاحب العمل أو المدير فقط؛ والخروج يبطل الجلسة
  assert.equal((await api(`/api/wall/items/${ready.id}`,'DELETE',undefined,otherH)).status,403);
  assert.equal((await api(`/api/wall/items/${ready.id}`,'DELETE',undefined,member)).status,200);
  assert.equal((await api('/api/wall/boards/'+code+'/leave','POST',{},member)).status,200);
  assert.equal((await api('/api/wall/boards/'+code,'GET',undefined,member)).data.me,null);
  // استرجاع مفتاح الإدارة: فقط لبريد المالك، ويُبطل المفتاح القديم
- await api('/api/wall/boards/'+code+'/recover','POST',{email:'someone@else.test'});assert.equal(sent.length,1);
- await api('/api/wall/boards/'+code+'/recover','POST',{email:'owner@example.com'});assert.equal(sent.length,2);
+ sent.length=0;await api('/api/wall/boards/'+code+'/recover','POST',{email:'someone@else.test'});assert.equal(sent.length,0);
+ await api('/api/wall/boards/'+code+'/recover','POST',{email:'owner@example.com'});assert.equal(sent.length,1);
  assert.equal((await api('/api/wall/boards/'+code,'GET',undefined,owner)).data.isOwner,false);
- const newKey=sent[1].text.match(/key=([a-f0-9]{64})/)[1];assert.equal((await api('/api/wall/boards/'+code,'GET',undefined,{'X-Wall-Key':newKey})).data.isOwner,true);
+ const newKey=sent[0].text.match(/key=([a-f0-9]{64})/)[1];assert.equal((await api('/api/wall/boards/'+code,'GET',undefined,{'X-Wall-Key':newKey})).data.isOwner,true);
  const qr=await api('/api/wall/boards/'+code+'/qr');assert.equal(qr.headers.get('content-type'),'image/png');
  assert.equal((await api('/api/wall/boards/zzzzzzzz')).status,404);
 });
