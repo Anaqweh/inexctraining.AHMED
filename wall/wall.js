@@ -195,8 +195,8 @@ async function paintViewer(){
  const c=colorOf(it.author);$('v-owner').textContent=it.author;$('v-title').textContent=it.title;$('v-title').dir=/^[؀-ۿ]/.test(it.title)?'rtl':'ltr';$('v-by').textContent=`${metaOf(it)} · ${new Date(it.createdAt).toLocaleDateString('ar-AE',{day:'numeric',month:'long'})}`;
  $('v-nav').hidden=state.items.length<2;$('v-count').textContent=`${vIdx+1} / ${state.items.length}`;
  const own=state.board.isOwner;$('v-del').hidden=!(own||it.mine);$('v-del').textContent='حذف';$('v-approve').hidden=!(own&&!it.approved);
- const stamped=it.status==='ready'&&it.pages>0&&it.stampedUrl;$('v-dl').hidden=!(stamped||((state.board.settings.allowDownload||own||it.mine)&&['office','other','pdf','text','image'].includes(it.kind)));$('v-dl').textContent=stamped?'تنزيل بختم التميز (PDF)':'الملف الأصلي';$('v-dl').onclick=()=>stamped?downloadFile(it.stampedUrl,`${it.title} - توقيع التميز.pdf`):downloadFile(it.fileUrl,it.fileName);
- $('v-orig').hidden=!(stamped&&(own||it.mine));$('v-replace').hidden=!(own||it.mine);$('v-orig').onclick=()=>downloadFile(it.fileUrl,it.fileName);
+ const stamped=it.status==='ready'&&it.pages>0&&it.stampedUrl;$('v-dl').hidden=!(stamped||((state.board.settings.allowDownload||own||it.mine)&&['office','other','pdf','text','image'].includes(it.kind)));$('v-dl').textContent='تنزيل';$('v-dl').onclick=()=>stamped?downloadFile(it.stampedUrl,`${it.title} - توقيع التميز.pdf`):downloadFile(it.fileUrl,it.fileName);
+ $('v-replace').hidden=!(own||it.mine);
  const stage=$('v-stage');const fileUrl=API+it.fileUrl;
  if(it.status==='processing'){stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">⏳</div><b>جارٍ تجهيز صفحات هذا العمل…</b><small>يُحوَّل الملف على الخادم إلى صفحات مختومة بتوقيع التميز، وتظهر هنا تلقائيًا خلال لحظات.</small></div>`;vPoll=setTimeout(async()=>{try{const r=await api('/wall/items/'+it.id);Object.assign(it,r.item);if(vItem===it)paintViewer()}catch{}},3000)}
  else if(it.status==='failed'){stage.innerHTML=`<div class="v-file" style="--pc:${c}"><div class="big">⚠️</div><b>تعذّر تحويل هذا الملف</b><small>${esc(it.error||'')} ${own?'<br>يمكنك إعادة المحاولة من الزر أدناه.':''}</small>${own?'<p><button type="button" id="v-retry">إعادة المحاولة</button></p>':''}<p><a href="${fileUrl}" target="_blank" rel="noopener">فتح الملف الأصلي</a></p></div>`;$('v-retry')?.addEventListener('click',async()=>{try{await api(`/wall/items/${it.id}/retry`,{method:'POST',body:{}});it.status='processing';paintViewer()}catch(err){say(err.message)}})}
@@ -230,14 +230,14 @@ $('send-form').addEventListener('submit',async e=>{
  if(sendItem)body.itemId=sendItem.id;$('s-go').disabled=true;
  try{const r=await api(`/wall/boards/${code}/email`,{method:'POST',body});sd.close();say(`✓ أُرسل إلى ${r.sent} من ${r.total}`,5000)}catch(err){say(err.message,5000)}finally{$('s-go').disabled=false}});
 /* ——— العرض على الشاشة ——— */
-let shI=0,shP=1;
+let shI=0,shP=1,shZoom=1;
 const shItems=()=>state.items.filter(i=>i.status==='ready'&&i.pages>0);
 function startShow(fromItem){const list=shItems();if(!list.length)return say('لا أعمال جاهزة للعرض بعد');shI=fromItem?Math.max(0,list.findIndex(x=>x.id===fromItem.id)):0;shP=1;$('show').hidden=false;try{$('show').requestFullscreen?.()}catch{}paintShow()}
 function shNext(){const list=shItems();const it=list[shI];if(!it)return endShow();if(shP<it.pages)shP++;else{shI=(shI+1)%list.length;shP=1}paintShow()}
 function shPrev(){const list=shItems();if(shP>1)shP--;else{shI=(shI-1+list.length)%list.length;shP=shItems()[shI].pages}paintShow()}
 function paintShow(){const list=shItems();const it=list[shI];if(!it)return endShow();
  $('show').classList.remove('fade');void $('show').offsetWidth;$('show').classList.add('fade');
- $('sh-stage').innerHTML=`<img src="${API}${it.pageUrl}${shP}" alt="">`;
+ shZoom=1;$('sh-stage').classList.remove('zoomed');$('sh-stage').innerHTML=`<img src="${API}${it.pageUrl}${shP}" alt="">`;
  if(it.pages>shP){const pre=new Image();pre.src=`${API}${it.pageUrl}${shP+1}`}
  $('sh-name').textContent=it.author;$('sh-title').textContent=it.title;
  const pg=$('sh-page');pg.hidden=it.pages<2;pg.textContent=`صفحة ${shP} / ${it.pages}`;
@@ -246,6 +246,11 @@ function endShow(){$('show').hidden=true;try{if(document.fullscreenElement)docum
 $('sh-exit').addEventListener('click',endShow);
 $('sh-prev').addEventListener('click',shPrev);
 $('sh-next').addEventListener('click',shNext);
+function shApplyZoom(){const img=$('sh-stage').querySelector('img');if(!img)return;
+ if(shZoom<=1.001){shZoom=1;$('sh-stage').classList.remove('zoomed');img.style.width='';img.style.maxWidth='';img.style.maxHeight=''}
+ else{$('sh-stage').classList.add('zoomed');img.style.maxWidth='none';img.style.maxHeight='none';img.style.width=Math.round(shZoom*90)+'%'}}
+$('sh-zin').addEventListener('click',()=>{shZoom=Math.min(3,shZoom+0.25);shApplyZoom()});
+$('sh-zout').addEventListener('click',()=>{shZoom=Math.max(1,shZoom-0.25);shApplyZoom()});
 $('sh-prev-item').addEventListener('click',()=>{shI=(shI-1+shItems().length)%shItems().length;shP=1;paintShow()});
 $('sh-next-item').addEventListener('click',()=>{shI=(shI+1)%shItems().length;shP=1;paintShow()});
 document.addEventListener('keydown',e=>{if($('show').hidden)return;if(e.key==='Escape')endShow();if(e.key==='ArrowLeft')$('sh-next').click();if(e.key==='ArrowRight')$('sh-prev').click()});
