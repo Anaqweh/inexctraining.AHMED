@@ -14,7 +14,7 @@ document.head.appendChild(inexcFont);
 const inexcFavicon = document.querySelector('link[rel~="icon"]') || document.createElement('link');
 inexcFavicon.rel = 'icon';
 inexcFavicon.type = 'image/png';
-inexcFavicon.href = '/assets/inexc-icon.png';
+inexcFavicon.href = '/assets/inexc-favicon-192.png?v=20261116';
 if (!inexcFavicon.parentNode) document.head.appendChild(inexcFavicon);
 
 /* إضافة اسم البنك كحقل مستقل في لوحة الإدارة، مع حفظه وعرضه للمتدرب. */
