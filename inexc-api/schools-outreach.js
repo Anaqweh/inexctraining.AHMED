@@ -193,7 +193,7 @@ export function installSchoolsOutreach({ app, pool, auth, sendEmail, worker = ()
     res.json(row);
   });
 
-  route('get', '/settings', async (_req, res) => res.json({ settings: await getSettings(), defaults: contactDefaults, emirates: EMIRATES.map(e => e.id), templates: schoolTemplates }));
+  route('get', '/settings', async (_req, res) => res.json({ settings: await getSettings(), defaults: contactDefaults, emirates: EMIRATES, templates: schoolTemplates }));
   route('put', '/settings', async (req, res) => {
     const settings = schoolSettings(req.body);
     await pool.query('INSERT INTO outreach_school_settings(id,value) VALUES(1,$1) ON CONFLICT(id) DO UPDATE SET value=EXCLUDED.value', [settings]);
