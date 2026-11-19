@@ -2,6 +2,7 @@ import {adminRegistrations} from './admin-registration-income.js';
 import {setupCertificateLinkPayments,createCertificateLinkPayments} from './certificate-link-payments.js';
 import {setupCourseProjects,installCourseProjects} from './course-projects.js';
 import {setupCourseWall,installCourseWall} from './course-wall.js';
+import {setupSchoolsOutreach,installSchoolsOutreach} from './schools-outreach.js';
 import {setupBoardCardOffers,installBoardCardOffers} from './board-card-offers.js';
 import {allowsRepeatRegistration} from './registration-policy.js';
 import {setupRegistrationDeletion,deleteRegistration} from './registration-deletion.js';
@@ -321,10 +322,10 @@ function emailShell({ title, preview, content, direction = 'rtl' }) {
   const english = dir === 'ltr';
   return `<!doctype html><html lang="${english ? 'en' : 'ar'}" dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head><body dir="${dir}" style="direction:${dir};text-align:${align};margin:0;background:#eef5fc;color:#17324d;font-family:Tahoma,Arial,sans-serif;line-height:1.8"><div style="display:none;max-height:0;overflow:hidden;opacity:0">${preview}</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef5fc;padding:28px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 10px 32px rgba(15,70,120,.12)"><tr><td align="center" style="background:linear-gradient(135deg,#0866c6,#063f86);padding:30px 34px;color:#ffffff;text-align:center"><div style="font-size:12px;letter-spacing:1.6px;font-weight:700;opacity:.82">INEXC TRAINING</div><div style="font-size:25px;font-weight:800;margin-top:7px">${english ? 'Innovative Excellence' : 'شركة التميز الابتكاري'}</div><div style="font-size:13px;margin-top:5px;opacity:.9">${english ? 'Training that makes a real difference' : 'برامج تدريبية تصنع أثرًا حقيقيًا'}</div></td></tr><tr><td dir="${dir}" align="${align}" style="padding:32px 34px;direction:${dir};text-align:${align}">${content}</td></tr><tr><td style="padding:20px 34px;background:#f7fbff;border-top:1px solid #dceafb;text-align:center;color:#6b8095;font-size:11px">${english ? 'This is an automated message from INEXC Training. Please do not reply directly.' : 'هذه رسالة آلية من INEXC Training. يرجى عدم الرد عليها مباشرة.'}<br><a href="https://wa.me/971543475500" style="display:inline-block;margin:10px 0 7px;background:#18a957;color:#ffffff;text-decoration:none;padding:7px 14px;border-radius:999px;font-weight:700">${english ? 'Contact us on WhatsApp' : 'تواصل معنا عبر واتساب'} ‎+971 54 347 5500</a><br><span style="color:#0866c6;font-weight:700">inexctraining.com</span></td></tr></table></td></tr></table></body></html>`;
 }
-async function sendEmail({ to, subject, html, marketing = false, text = '', headers = {}, attachmentPath = '', attachments = null, idempotencyKey = '' }) {
+async function sendEmail({ to, subject, html, marketing = false, text = '', headers = {}, attachmentPath = '', attachments = null, idempotencyKey = '', replyTo = '' }) {
   if (!resendApiKey || !to) return;
   if (marketing) await assertMailAllowed(pool,to);
-  const payload = { from: emailFrom, to: [to], subject, html, ...(text ? {text} : {}), ...(Object.keys(headers).length ? {headers} : {}) };
+  const payload = { from: emailFrom, to: [to], subject, html, ...(text ? {text} : {}), ...(Object.keys(headers).length ? {headers} : {}), ...(replyTo ? {reply_to: replyTo} : {}) };
   if (attachments?.length) payload.attachments = attachments;
   else if (attachmentPath) {
     const fileName = path.basename(attachmentPath);
@@ -799,7 +800,7 @@ async function deliverMessageCampaign(campaignId) {
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           await pool.query('UPDATE email_deliveries SET attempts=attempts+1 WHERE id=$1',[delivery.id]);
-          result = await sendEmail({ to: delivery.email, marketing:true, subject: message.subject, html: message.html, text:message.text || '', headers:message.headers || {'List-Unsubscribe':'<'+emailPreferenceUnsubscribeUrl(preference.unsubscribe_token)+'>'}, attachmentPath: campaign.attachment_path, idempotencyKey: `message/${delivery.id}` });
+          result = await sendEmail({ to: delivery.email, marketing:true, subject: message.subject, html: message.html, text:message.text || '', headers:message.headers || {'List-Unsubscribe':'<'+emailPreferenceUnsubscribeUrl(preference.unsubscribe_token)+'>'}, attachmentPath: campaign.attachment_path, idempotencyKey: `message/${delivery.id}`, replyTo: message.replyTo || '' });
           if (!result?.id) throw new Error('لم يؤكّد مزود البريد قبول الرسالة.');
           break;
         } catch (error) {
@@ -939,7 +940,7 @@ async function processCourseAlertQueue(options = {}) {
   } catch (error) { console.error('Course alert worker failed:', error.message); }
 }
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'INEXC Training API', trainingPackageLabelsVersion: 1, courseCardAccessVersion: 1, messageStudioVersion: 5, subscriptionsVersion: 2, learnerVersion: 1, certificateRequestsVersion: 1, certificateLinkPaymentsVersion: 2, adminIncomeVersion: 1, freeCardCertificateVersion: 1, registrationDeletionVersion: 1, courseProjectsVersion: 3 }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'INEXC Training API', trainingPackageLabelsVersion: 1, courseCardAccessVersion: 1, messageStudioVersion: 5, schoolsOutreachVersion: 1, subscriptionsVersion: 2, learnerVersion: 1, certificateRequestsVersion: 1, certificateLinkPaymentsVersion: 2, adminIncomeVersion: 1, freeCardCertificateVersion: 1, registrationDeletionVersion: 1, courseProjectsVersion: 3 }));
 const defaultSiteSections={courses:true,packages:true,services:true,links:[]};
 app.get('/api/site-sections',async(_req,res,next)=>{try{const row=(await pool.query('SELECT value FROM site_section_settings WHERE id=1')).rows[0];res.set('Cache-Control','public, max-age=10').json(row?.value||defaultSiteSections)}catch(error){next(error)}});
 app.get('/api/admin/site-sections',auth,async(_req,res,next)=>{try{const row=(await pool.query('SELECT value FROM site_section_settings WHERE id=1')).rows[0];res.set('Cache-Control','no-store').json(row?.value||defaultSiteSections)}catch(error){next(error)}});
@@ -1929,9 +1930,10 @@ app.get('/api/admin/export.csv', auth, async (_req, res, next) => { try { const 
 installLearnerService({app,pool,auth,uploadDir,sendEmail,emailShell,mailEnabled:!!resendApiKey});
 installServiceCatalog({app,pool,auth,uploadDir});
 const courseProjects=installCourseProjects({app,pool,auth,uploadDir,sendEmail,mailEnabled:!!resendApiKey,mailAllowed:async email=>!(await blockedEmails(pool,[email])).has(email)});
+installSchoolsOutreach({app,pool,auth,sendEmail,worker:processScheduledMessageCampaigns,mailEnabled:!!resendApiKey});
 const courseWall=installCourseWall({app,pool,uploadDir,sendEmail,emailShell,mailEnabled:!!resendApiKey});
 installBoardCardOffers({app,pool,auth,courseMediaUpload,apiOrigin:'https://api.inexctraining.com'});
 app.use((error, _req, res, _next) => { console.error(error); if(error.constraint==='membership_orders_verified_payment_unique')return res.status(409).json({error:'رقم عملية الدفع هذا مستخدم في طلب آخر. راجع العملية قبل إصدار الباقة.'}); const status=error instanceof multer.MulterError ? 400 : [400,401,403,404,409,429].includes(error.status) ? error.status : 500; res.status(status).json({ error: status===500 ? 'حدث خطأ في الخادم. حاول مرة أخرى لاحقًا.' : error.message || 'تعذر تنفيذ الطلب.' }); });
 
-setupDatabase().then(() => setupCourseProjects(pool)).then(() => setupCourseWall(pool)).then(() => setupBoardCardOffers(pool)).then(() => setupServiceCatalog(pool)).then(() => setupLearnerService(pool)).then(() => setupCertificateLinkPayments(pool)).then(() => setupStripePayments(pool)).then(() => setupCoursePaymentControls(pool)).then(() => setupMembershipPayments(pool)).then(() => setupRegistrationDeletion(pool)).then(() => { app.listen(port, () => console.log(`INEXC API listening on ${port}`)); void courseWall.resumeProcessing(); void processCourseAlertQueue(); void processScheduledMessageCampaigns(); void certificateRequests.processEmailQueue(); void courseProjects.processEmailQueue(); void certificateLinkPayments.sync(); setInterval(() => { void processCourseAlertQueue(); void processScheduledMessageCampaigns(); void certificateRequests.processEmailQueue(); void courseProjects.processEmailQueue(); void certificateLinkPayments.sync(); }, 60 * 1000); }).catch(error => { console.error(error); process.exit(1); });
+setupDatabase().then(() => setupCourseProjects(pool)).then(() => setupCourseWall(pool)).then(() => setupSchoolsOutreach(pool)).then(() => setupBoardCardOffers(pool)).then(() => setupServiceCatalog(pool)).then(() => setupLearnerService(pool)).then(() => setupCertificateLinkPayments(pool)).then(() => setupStripePayments(pool)).then(() => setupCoursePaymentControls(pool)).then(() => setupMembershipPayments(pool)).then(() => setupRegistrationDeletion(pool)).then(() => { app.listen(port, () => console.log(`INEXC API listening on ${port}`)); void courseWall.resumeProcessing(); void processCourseAlertQueue(); void processScheduledMessageCampaigns(); void certificateRequests.processEmailQueue(); void courseProjects.processEmailQueue(); void certificateLinkPayments.sync(); setInterval(() => { void processCourseAlertQueue(); void processScheduledMessageCampaigns(); void certificateRequests.processEmailQueue(); void courseProjects.processEmailQueue(); void certificateLinkPayments.sync(); }, 60 * 1000); }).catch(error => { console.error(error); process.exit(1); });
 
