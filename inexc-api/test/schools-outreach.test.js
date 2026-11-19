@@ -120,6 +120,25 @@ test('edited texts and per-emirate lines override defaults; unsafe settings fall
  assert.ok(renderSchoolMail({templateId:'question',language:'ar',school:{name:'مدرسة الأمل',emirate:'دبي'},settings}).html.includes('https://wa.me/971500000000?text='));
 });
 
+test('every part of the message is editable: blank fields disappear, footer, WhatsApp text and emirate names follow settings',()=>{
+ const school={name:'مدرسة الأمل',emirate:'دبي'},unsubscribeUrl='https://api.example.test/u?token=abc';
+ const settings=schoolSettings({senderTitle:'',footerAr:'تذييل خاص',reasonAr:'',unsubscribeAr:'',websiteLabel:'موقعنا',emirateLines:{'دبي':{nameAr:'إمارة دبي',authorityAr:'الهيئة'}},
+  templates:{letter:{ar:{ps:'',pointsTitle:'',subject:''}},day:{ar:{cta:'',eyebrow:'',headline:'',intro:''}},question:{ar:{waText:'من {{school}}: {{answer}}',answers:'إجابة جديدة'}},menu:{ar:{waText:'نختار من {{emirate}}',items:'برنامج وحيد | وصفه'}}}});
+ assert.equal(settings.templates.letter.ar.ps,'');assert.equal(settings.unsubscribeAr,'إلغاء استلام رسائلنا','the unsubscribe link can be reworded but never removed');
+ const letter=renderSchoolMail({templateId:'letter',language:'ar',school,settings,unsubscribeUrl});
+ assert.ok(!letter.html.includes('ملاحظة: يمكن البدء')&&!letter.html.includes('ما الذي يمكن أن نقدمه'),'blank fields are hidden, not reset');
+ assert.match(letter.subject,/إلى إدارة مدرسة الأمل/,'a blank subject falls back to the original');
+ assert.ok(letter.html.includes('تذييل خاص')&&letter.html.includes('>موقعنا<')&&!letter.html.includes('وصلتكم هذه الرسالة')&&letter.html.includes('إلغاء استلام رسائلنا'));
+ assert.ok(letter.html.includes('مدارس إمارة دبي تعمل ضمن متطلبات الهيئة')&&!letter.html.includes('شركة التميز الابتكاري (INEXC) — دبي'));
+ const day=renderSchoolMail({templateId:'day',language:'ar',school,settings,unsubscribeUrl});
+ assert.ok(!day.html.includes('register.html?type=institution')&&!day.html.includes('يوم واحد. مخرجات'),'empty button and hero are removed');
+ const question=renderSchoolMail({templateId:'question',language:'ar',school,settings,unsubscribeUrl});
+ assert.ok(question.html.includes(encodeURIComponent('من مدرسة الأمل: إجابة جديدة'))&&!question.html.includes('تحضير الدروس والأنشطة'));
+ const menu=renderSchoolMail({templateId:'menu',language:'ar',school,settings,unsubscribeUrl});
+ assert.ok(menu.html.includes(encodeURIComponent('نختار من إمارة دبي'))&&menu.html.includes('برنامج وحيد')&&!menu.html.includes('>02<'));
+ for(const mail of [letter,day,question,menu])assert.ok(!mail.html.includes('{{')&&!mail.html.includes('undefined')&&!mail.text.includes('undefined'));
+});
+
 test('import, audience rules and sending by emirate through the existing campaign queue',async t=>{
  const h=await harness();t.after(h.close);
  assert.equal((await h.api('/overview','GET',undefined,'bad')).status,401);
