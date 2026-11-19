@@ -139,6 +139,23 @@ test('every part of the message is editable: blank fields disappear, footer, Wha
  for(const mail of [letter,day,question,menu])assert.ok(!mail.html.includes('{{')&&!mail.html.includes('undefined')&&!mail.text.includes('undefined'));
 });
 
+test('edit mode returns the whole message with every text marked for in-place editing',async t=>{
+ for(const template of schoolTemplates)for(const language of ['ar','en']){
+  const mail=renderSchoolMail({templateId:template.id,language,school:{name:'مدرسة الأمل',emirate:'دبي'},edit:true});
+  for(const field of template.fields.filter(f=>!['subject','waText'].includes(f.key)))assert.ok(mail.html.includes(`data-f="${field.key}"`),template.id+' marks '+field.key);
+  for(const key of language==='en'?['senderNameEn','senderTitleEn','footerEn','reasonEn','unsubscribeEn']:['senderName','senderTitle','footerAr','reasonAr','unsubscribeAr'])assert.ok(mail.html.includes(`data-s="${key}"`),template.id+' marks '+key);
+  assert.ok(mail.html.includes('{{school}}')&&!mail.html.includes('wa.me')&&!mail.html.includes('mailto:'),'texts stay as written and links are inert');
+  assert.match(mail.subject,/\{\{(school|emirate)\}\}/);
+ }
+ const list=renderSchoolMail({templateId:'menu',language:'ar',school:{emirate:'دبي'},edit:true,settings:{templates:{menu:{ar:{items:'برنامج بلا وصف',intro:''}}}}}).html;
+ assert.ok(list.includes('data-r="items" data-i="0"')&&list.includes('data-f="items" data-i="0" data-p="2"'),'missing list parts are still offered for editing');
+ assert.ok(list.includes('data-f="intro"'),'a blanked text stays reachable in the editor');
+ assert.ok(!renderSchoolMail({templateId:'menu',language:'ar',school:{name:'مدرسة الأمل',emirate:'دبي'}}).html.includes('data-f='),'sent mail carries no editor markers');
+ const h=await harness();t.after(h.close);
+ const res=await h.api('/preview','POST',{emirate:'دبي',templateId:'letter',language:'en',edit:true});
+ assert.equal(res.status,200);assert.ok(res.data.html.includes('data-f="greeting"')&&res.data.html.includes('Dear {{school}} leadership team,'));
+});
+
 test('import, audience rules and sending by emirate through the existing campaign queue',async t=>{
  const h=await harness();t.after(h.close);
  assert.equal((await h.api('/overview','GET',undefined,'bad')).status,401);
