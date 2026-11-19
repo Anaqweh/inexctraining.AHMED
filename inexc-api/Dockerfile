@@ -26,3 +26,5 @@ COPY certificate-link-payments.js ./
 COPY admin-registration-income.js ./
 
 COPY course-wall.js wall-render.py ./
+
+COPY schools-outreach.js schools-mail.js schools-xlsx.js ./
