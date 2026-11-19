@@ -130,7 +130,12 @@ export function schoolLanguage(school = {}, mode = 'auto') {
 const table = (content, style = '', attrs = '') => `<table role="presentation" cellspacing="0" cellpadding="0" border="0" ${attrs} style="border-collapse:collapse;${style}">${content}</table>`;
 const listLines = value => String(value || '').split(/\r?\n/).map(line => line.split('|').map(part => part.trim())).filter(parts => parts[0]);
 
-function context({ template, lang, school, settings }) {
+// عدد أجزاء كل عنصر في قوائم القوالب (يُستخدم في وضع التعديل لإظهار الأجزاء الفارغة أيضًا).
+const LIST_PARTS = { points: 2, steps: 3, items: 3, answers: 1 };
+
+// edit=true: وضع «التعديل داخل الرسالة». تُعرض النصوص كما كُتبت (مع {{school}} وأخواتها) وكل نص يحمل
+// علامة data-f / data-s حتى تجعله لوحة الإدارة قابلًا للكتابة مباشرة ثم تقرأ ما كُتب.
+function context({ template, lang, school, settings, edit = false }) {
   const english = lang === 'en', info = emirateInfo(school.emirate), custom = settings.emirateLines?.[school.emirate] || {};
   const variables = {
     school: schoolName(school.name, lang) || (english ? 'your school' : 'مدرستكم'),
@@ -138,53 +143,67 @@ function context({ template, lang, school, settings }) {
     authority: (english ? custom.authorityEn : custom.authorityAr) || (english ? info.authorityEn : info.authorityAr),
     sender: english ? settings.senderNameEn : settings.senderName,
   };
-  const merge = value => String(value ?? '').replace(/\{\{(school|emirate|authority|sender)\}\}/g, (_, key) => variables[key]);
-  const override = custom[lang];
-  variables.emirateLine = merge(override || (english ? settings.emirateLineEn : settings.emirateLineAr));
+  const merge = value => edit ? String(value ?? '') : String(value ?? '').replace(/\{\{(school|emirate|authority|sender)\}\}/g, (_, key) => variables[key]);
+  variables.emirateLine = merge(custom[lang] || (english ? settings.emirateLineEn : settings.emirateLineAr));
   const raw = key => { const field = template.fields.find(f => f.key === key); return settings.templates?.[template.id]?.[lang]?.[key] ?? field?.[lang] ?? ''; };
-  const plain = key => merge(raw(key)).replace(/\{\{emirateLine\}\}/g, variables.emirateLine).trim();
+  const plain = key => (edit ? String(raw(key)) : merge(raw(key)).replace(/\{\{emirateLine\}\}/g, variables.emirateLine)).trim();
+  const br = text => esc(text).replace(/\n/g, '<br>');
   const dir = english ? 'ltr' : 'rtl', align = english ? 'left' : 'right', font = english ? 'Arial,Helvetica,sans-serif' : "Tahoma,'Segoe UI',Arial,sans-serif";
-  return { english, lang, dir, align, font, variables, plain, merge, html: key => esc(plain(key)).replace(/\n/g, '<br>'), list: key => listLines(plain(key)), settings, school };
+  const label = key => esc(template.fields.find(f => f.key === key)?.label || '');
+  return {
+    english, lang, dir, align, font, variables, plain, merge, settings, school, edit,
+    has: key => edit || !!plain(key),
+    list: key => listLines(plain(key)),
+    // نص حقل واحد جاهز للوضع في الرسالة.
+    h: key => edit ? `<span data-f="${key}" data-ph="${label(key)}">${br(plain(key))}</span>` : br(plain(key)),
+    // عناصر قائمة: لكل عنصر علامة الصف وأجزاؤه.
+    rows: key => listLines(plain(key)).map((parts, i) => {
+      const count = edit ? Math.max(LIST_PARTS[key] || 1, parts.length) : parts.length;
+      const cells = Array.from({ length: count }, (_, j) => edit ? `<span data-f="${key}" data-i="${i}" data-p="${j}" data-ph="…">${esc(parts[j] || '')}</span>` : esc(parts[j] || ''));
+      return { attr: edit ? ` data-r="${key}" data-i="${i}"` : '', cells, texts: parts };
+    }),
+    // نص من الإعدادات العامة (التوقيع والتذييل) بحسب لغة الرسالة.
+    s: (arKey, enKey, merged = false) => { const key = english ? enKey : arKey, value = String(settings[key] ?? ''); return edit ? `<span data-s="${key}" data-ph="…">${esc(value)}</span>` : esc(merged ? merge(value) : value); },
+  };
 }
-const whatsappUrl = (settings, text) => 'https://wa.me/' + settings.whatsapp + '?text=' + encodeURIComponent(text);
+const whatsappUrl = (c, text) => c.edit ? '#' : 'https://wa.me/' + c.settings.whatsapp + '?text=' + encodeURIComponent(text);
 // الزر داخل صف بعرض كامل حتى لا يلتف ما بعده بجانبه في برامج البريد.
-const button = (c, label, href) => !label ? '' : table(`<tr><td align="${c.align}" dir="${c.dir}">` + table(`<tr><td align="center" bgcolor="${BLUE}" style="background:${BLUE};border-radius:8px"><a href="${esc(href)}" style="display:inline-block;padding:13px 26px;font-family:${c.font};font-size:16px;font-weight:700;line-height:1.5;color:#ffffff;text-decoration:none">${esc(label)}</a></td></tr>`) + `</td></tr>`, 'width:100%', 'width="100%"');
+const button = (c, labelHtml, href) => !labelHtml ? '' : table(`<tr><td align="${c.align}" dir="${c.dir}">` + table(`<tr><td align="center" bgcolor="${BLUE}" style="background:${BLUE};border-radius:8px"><a href="${esc(c.edit ? '#' : href)}" style="display:inline-block;padding:13px 26px;font-family:${c.font};font-size:16px;font-weight:700;line-height:1.5;color:#ffffff;text-decoration:none">${labelHtml}</a></td></tr>`) + `</td></tr>`, 'width:100%', 'width="100%"');
 const paragraph = (c, html, extra = '') => html ? `<p dir="${c.dir}" style="margin:0 0 16px;font-family:${c.font};font-size:16px;line-height:1.95;color:${INK};text-align:${c.align};${extra}">${html}</p>` : '';
 const eyebrow = (c, html, color = BLUE) => html ? `<div dir="${c.dir}" style="font-family:${c.font};font-size:13px;font-weight:700;line-height:1.7;color:${color};text-align:${c.align};margin:0 0 8px">${html}</div>` : '';
-const headline = (c, html, color = NAVY, size = 28) => !html ? '' : `<div dir="${c.dir}" style="font-family:${c.font};font-size:${size}px;font-weight:700;line-height:1.5;color:${color};text-align:${c.align};margin:0 0 14px">${html}</div>`;
-const signature = c => { const name = c.english ? c.settings.senderNameEn : c.settings.senderName, title = c.english ? c.settings.senderTitleEn : c.settings.senderTitle; return `<div dir="${c.dir}" style="font-family:${c.font};text-align:${c.align};border-top:1px solid ${LINE};margin-top:8px;padding-top:16px">${name ? `<div style="font-size:16px;font-weight:700;line-height:1.7;color:${NAVY}">${esc(name)}</div>` : ''}${title ? `<div style="font-size:13px;line-height:1.8;color:${MUTED}">${esc(title)}</div>` : ''}<div dir="ltr" style="font-size:13px;line-height:1.8;color:${MUTED};text-align:${c.align}"><a href="mailto:${esc(c.settings.email)}" style="color:${BLUE};text-decoration:none">${esc(c.settings.email)}</a> &nbsp;·&nbsp; <a href="https://wa.me/${esc(c.settings.whatsapp)}" style="color:${BLUE};text-decoration:none">+${esc(c.settings.whatsapp)}</a></div></div>`; };
+const headline = (c, html, color = NAVY, size = 28, margin = '0 0 14px') => !html ? '' : `<div dir="${c.dir}" style="font-family:${c.font};font-size:${size}px;font-weight:700;line-height:1.5;color:${color};text-align:${c.align};margin:${margin}">${html}</div>`;
+const signature = c => {
+  const name = c.s('senderName', 'senderNameEn'), title = c.s('senderTitle', 'senderTitleEn');
+  return `<div dir="${c.dir}" style="font-family:${c.font};text-align:${c.align};border-top:1px solid ${LINE};margin-top:8px;padding-top:16px">${name ? `<div style="font-size:16px;font-weight:700;line-height:1.7;color:${NAVY}">${name}</div>` : ''}${title ? `<div style="font-size:13px;line-height:1.8;color:${MUTED}">${title}</div>` : ''}<div dir="ltr" style="font-size:13px;line-height:1.8;color:${MUTED};text-align:${c.align}"><a href="${c.edit ? '#' : 'mailto:' + esc(c.settings.email)}" style="color:${BLUE};text-decoration:none">${esc(c.settings.email)}</a> &nbsp;·&nbsp; <a href="${c.edit ? '#' : 'https://wa.me/' + esc(c.settings.whatsapp)}" style="color:${BLUE};text-decoration:none">+${esc(c.settings.whatsapp)}</a></div></div>`;
+};
 const hero = (c, inner) => table(`<tr><td bgcolor="${BLUE}" style="background:${BLUE};border-radius:12px;padding:28px 26px">${inner}</td></tr>`, 'width:100%;margin:0 0 24px', 'width="100%"');
 const aboutBox = (c, html) => html ? table(`<tr><td bgcolor="${TINT}" style="background:${TINT};border-radius:10px;padding:16px 18px;border-${c.english ? 'left' : 'right'}:4px solid ${BLUE}"><div dir="${c.dir}" style="font-family:${c.font};font-size:14px;line-height:1.9;color:${INK};text-align:${c.align}">${html}</div></td></tr>`, 'width:100%;margin:8px 0 22px', 'width="100%"') : '';
 const spacer = `<div style="height:22px;line-height:22px;font-size:0">&nbsp;</div>`;
 
 const bodies = {
   letter(c) {
-    const points = c.list('points').map(([title, text]) => `<tr><td valign="top" width="14" style="width:14px;padding:9px 0 0"><div style="width:8px;height:8px;background:${BLUE};border-radius:8px;font-size:0;line-height:0">&nbsp;</div></td><td style="padding:0 0 12px;font-family:${c.font};font-size:16px;line-height:1.9;color:${INK};text-align:${c.align}" dir="${c.dir}"><strong style="color:${NAVY}">${esc(title)}</strong>${text ? `<br><span style="color:${MUTED};font-size:15px">${esc(text)}</span>` : ''}</td></tr>`).join('');
-    return paragraph(c, c.html('greeting'), `font-weight:700;color:${NAVY}`) + paragraph(c, c.html('p1')) + paragraph(c, c.html('p2'))
-      + (points ? (c.plain('pointsTitle') ? `<div dir="${c.dir}" style="font-family:${c.font};font-size:17px;font-weight:700;line-height:1.7;color:${NAVY};text-align:${c.align};margin:6px 0 12px">${c.html('pointsTitle')}</div>` : '') + table(points, 'width:100%;margin:0 0 6px', `width="100%" dir="${c.dir}"`) : '')
-      + paragraph(c, c.html('p3')) + paragraph(c, c.html('ps'), `font-size:14px;color:${MUTED}`) + signature(c);
+    const points = c.rows('points').map(({ attr, cells: [title, text] }) => `<tr${attr}><td valign="top" width="14" style="width:14px;padding:9px 0 0"><div style="width:8px;height:8px;background:${BLUE};border-radius:8px;font-size:0;line-height:0">&nbsp;</div></td><td style="padding:0 0 12px;font-family:${c.font};font-size:16px;line-height:1.9;color:${INK};text-align:${c.align}" dir="${c.dir}"><strong style="color:${NAVY}">${title}</strong>${text ? `<br><span style="color:${MUTED};font-size:15px">${text}</span>` : ''}</td></tr>`).join('');
+    return paragraph(c, c.h('greeting'), `font-weight:700;color:${NAVY}`) + paragraph(c, c.h('p1')) + paragraph(c, c.h('p2'))
+      + (points || c.edit ? (c.has('pointsTitle') ? `<div dir="${c.dir}" style="font-family:${c.font};font-size:17px;font-weight:700;line-height:1.7;color:${NAVY};text-align:${c.align};margin:6px 0 12px">${c.h('pointsTitle')}</div>` : '') + table(points, 'width:100%;margin:0 0 6px', `width="100%" dir="${c.dir}"`) : '')
+      + paragraph(c, c.h('p3')) + paragraph(c, c.h('ps'), `font-size:14px;color:${MUTED}`) + signature(c);
   },
   day(c) {
-    const steps = c.list('steps'), side = c.english ? 'left' : 'right';
-    const rows = steps.map(([time, title, text], i) => `<tr><td valign="top" width="118" style="width:118px;padding:0 0 ${i === steps.length - 1 ? 0 : 6}px"><div dir="${c.dir}" style="font-family:${c.font};font-size:13px;font-weight:700;line-height:1.6;color:#ffffff;background:${i === steps.length - 1 ? NAVY : BLUE};border-radius:6px;padding:7px 8px;text-align:center">${esc(time)}</div></td><td valign="top" style="padding:0 14px ${i === steps.length - 1 ? 0 : 18}px;border-${side}:2px solid ${LINE}" dir="${c.dir}"><div style="font-family:${c.font};font-size:17px;font-weight:700;line-height:1.6;color:${NAVY};text-align:${c.align}">${esc(title || '')}</div><div style="font-family:${c.font};font-size:15px;line-height:1.9;color:${MUTED};text-align:${c.align}">${esc(text || '')}</div></td></tr>`).join('');
-    const top = eyebrow(c, c.html('eyebrow'), '#cfe2ff') + headline(c, c.html('headline'), '#ffffff', 30) + (c.plain('intro') ? `<div dir="${c.dir}" style="font-family:${c.font};font-size:16px;line-height:1.9;color:#e7f0ff;text-align:${c.align}">${c.html('intro')}</div>` : '');
-    return (top ? hero(c, top) : '')
-      + table(rows, 'width:100%;margin:0 0 24px', `width="100%" dir="${c.dir}"`) + paragraph(c, c.html('p2')) + aboutBox(c, c.html('about'))
-      + (c.plain('cta') ? button(c, c.plain('cta'), c.settings.requestUrl) + spacer : '') + signature(c);
+    const steps = c.rows('steps'), side = c.english ? 'left' : 'right';
+    const rows = steps.map(({ attr, cells: [time, title, text] }, i) => `<tr${attr}><td valign="top" width="118" style="width:118px;padding:0 0 ${i === steps.length - 1 ? 0 : 6}px"><div dir="${c.dir}" style="font-family:${c.font};font-size:13px;font-weight:700;line-height:1.6;color:#ffffff;background:${i === steps.length - 1 ? NAVY : BLUE};border-radius:6px;padding:7px 8px;text-align:center">${time}</div></td><td valign="top" style="padding:0 14px ${i === steps.length - 1 ? 0 : 18}px;border-${side}:2px solid ${LINE}" dir="${c.dir}"><div style="font-family:${c.font};font-size:17px;font-weight:700;line-height:1.6;color:${NAVY};text-align:${c.align}">${title || ''}</div><div style="font-family:${c.font};font-size:15px;line-height:1.9;color:${MUTED};text-align:${c.align}">${text || ''}</div></td></tr>`).join('');
+    const top = eyebrow(c, c.h('eyebrow'), '#cfe2ff') + headline(c, c.h('headline'), '#ffffff', 30) + (c.has('intro') ? `<div dir="${c.dir}" style="font-family:${c.font};font-size:16px;line-height:1.9;color:#e7f0ff;text-align:${c.align}">${c.h('intro')}</div>` : '');
+    return (top ? hero(c, top) : '') + table(rows, 'width:100%;margin:0 0 24px', `width="100%" dir="${c.dir}"`) + paragraph(c, c.h('p2')) + aboutBox(c, c.h('about'))
+      + (c.has('cta') ? button(c, c.h('cta'), c.settings.requestUrl) + spacer : '') + signature(c);
   },
   menu(c) {
-    const items = c.list('items');
-    const rows = items.map(([title, text, meta], i) => `<tr><td valign="top" width="46" style="width:46px;padding:14px 0;border-bottom:1px dashed ${LINE}"><div style="font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:700;line-height:1.2;color:${BLUE};text-align:center" dir="ltr">${String(i + 1).padStart(2, '0')}</div></td><td valign="top" style="padding:14px 10px;border-bottom:1px dashed ${LINE}" dir="${c.dir}"><div style="font-family:${c.font};font-size:17px;font-weight:700;line-height:1.6;color:${NAVY};text-align:${c.align}">${esc(title)}</div>${text ? `<div style="font-family:${c.font};font-size:15px;line-height:1.85;color:${MUTED};text-align:${c.align}">${esc(text)}</div>` : ''}${meta ? `<div style="font-family:${c.font};font-size:12px;font-weight:700;line-height:1.8;color:${BLUE};text-align:${c.align};margin-top:4px">${esc(meta)}</div>` : ''}</td></tr>`).join('');
-    return table(`<tr><td style="border:2px solid ${BLUE};border-radius:12px;padding:26px 22px 12px">` + eyebrow(c, c.html('eyebrow')) + headline(c, c.html('headline'), NAVY, 30) + paragraph(c, c.html('intro'), `color:${MUTED};margin-bottom:6px`) + table(rows, 'width:100%', `width="100%" dir="${c.dir}"`) + `</td></tr>`, 'width:100%;margin:0 0 22px', 'width="100%"')
-      + paragraph(c, c.html('p2')) + paragraph(c, c.html('note'), `font-size:15px;color:${MUTED}`) + (c.plain('cta') ? button(c, c.plain('cta'), whatsappUrl(c.settings, c.plain('waText') + ' ')) + spacer : '') + signature(c);
+    const rows = c.rows('items').map(({ attr, cells: [title, text, meta] }, i) => `<tr${attr}><td valign="top" width="46" style="width:46px;padding:14px 0;border-bottom:1px dashed ${LINE}"><div style="font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:700;line-height:1.2;color:${BLUE};text-align:center" dir="ltr">${String(i + 1).padStart(2, '0')}</div></td><td valign="top" style="padding:14px 10px;border-bottom:1px dashed ${LINE}" dir="${c.dir}"><div style="font-family:${c.font};font-size:17px;font-weight:700;line-height:1.6;color:${NAVY};text-align:${c.align}">${title}</div>${text ? `<div style="font-family:${c.font};font-size:15px;line-height:1.85;color:${MUTED};text-align:${c.align}">${text}</div>` : ''}${meta ? `<div style="font-family:${c.font};font-size:12px;font-weight:700;line-height:1.8;color:${BLUE};text-align:${c.align};margin-top:4px">${meta}</div>` : ''}</td></tr>`).join('');
+    return table(`<tr><td style="border:2px solid ${BLUE};border-radius:12px;padding:26px 22px 12px">` + eyebrow(c, c.h('eyebrow')) + headline(c, c.h('headline'), NAVY, 30) + paragraph(c, c.h('intro'), `color:${MUTED};margin-bottom:6px`) + table(rows, 'width:100%', `width="100%" dir="${c.dir}"`) + `</td></tr>`, 'width:100%;margin:0 0 22px', 'width="100%"')
+      + paragraph(c, c.h('p2')) + paragraph(c, c.h('note'), `font-size:15px;color:${MUTED}`) + (c.has('cta') ? button(c, c.h('cta'), whatsappUrl(c, c.plain('waText') + ' ')) + spacer : '') + signature(c);
   },
   question(c) {
-    const answers = c.list('answers').map(([label]) => label);
     const reply = label => (c.plain('waText') || label).replace(/\{\{answer\}\}/g, label);
-    const rows = answers.map((label, i) => `<tr><td style="padding:0 0 10px"><a href="${esc(whatsappUrl(c.settings, reply(label)))}" dir="${c.dir}" style="display:block;border:1px solid ${BLUE};border-radius:10px;padding:14px 18px;font-family:${c.font};font-size:17px;font-weight:700;line-height:1.6;color:${BLUE};text-decoration:none;text-align:${c.align};background:#ffffff"><span style="display:inline-block;width:30px;color:${MUTED};font-weight:400">${'ABCDEFGH'[i] || '•'}</span>${esc(label)}</a></td></tr>`).join('');
-    const top = eyebrow(c, c.html('eyebrow'), '#cfe2ff') + headline(c, c.html('headline'), '#ffffff', 27).replace('margin:0 0 14px', 'margin:0');
-    return (top ? hero(c, top) : '')
-      + table(rows, 'width:100%;margin:0 0 12px', 'width="100%"') + paragraph(c, c.html('after'), `font-size:15px;color:${MUTED}`) + paragraph(c, c.html('p2')) + aboutBox(c, c.html('about')) + signature(c);
+    const rows = c.rows('answers').map(({ attr, cells: [label], texts: [text] }, i) => `<tr${attr}><td style="padding:0 0 10px"><a href="${esc(whatsappUrl(c, reply(text || '')))}" dir="${c.dir}" style="display:block;border:1px solid ${BLUE};border-radius:10px;padding:14px 18px;font-family:${c.font};font-size:17px;font-weight:700;line-height:1.6;color:${BLUE};text-decoration:none;text-align:${c.align};background:#ffffff"><span style="display:inline-block;width:30px;color:${MUTED};font-weight:400">${'ABCDEFGH'[i] || '•'}</span>${label}</a></td></tr>`).join('');
+    const top = eyebrow(c, c.h('eyebrow'), '#cfe2ff') + headline(c, c.h('headline'), '#ffffff', 27, '0');
+    return (top ? hero(c, top) : '') + table(rows, 'width:100%;margin:0 0 12px', 'width="100%"') + paragraph(c, c.h('after'), `font-size:15px;color:${MUTED}`) + paragraph(c, c.h('p2')) + aboutBox(c, c.h('about')) + signature(c);
   },
 };
 const texts = {
@@ -194,29 +213,30 @@ const texts = {
   question: c => [c.plain('headline'), ...c.list('answers').map((p, i) => `${'ABCDEFGH'[i]}) ${p[0]}`), c.plain('after'), c.plain('p2'), c.plain('about')],
 };
 
-export function renderSchoolMail({ templateId, language = 'auto', school = {}, settings: rawSettings = {}, unsubscribeUrl = '', test = false }) {
+export function renderSchoolMail({ templateId, language = 'auto', school = {}, settings: rawSettings = {}, unsubscribeUrl = '', test = false, edit = false }) {
   const template = templateById(templateId);
   if (!template) throw Object.assign(new Error('قالب المدارس غير معروف.'), { status: 400 });
-  const settings = schoolSettings(rawSettings), mode = schoolLanguage(school, language);
+  const settings = schoolSettings(rawSettings), mode = edit ? (language === 'en' ? 'en' : 'ar') : schoolLanguage(school, language);
   const langs = mode === 'both' ? ['ar', 'en'] : [mode];
-  const contexts = langs.map(lang => context({ template, lang, school, settings }));
+  const contexts = langs.map(lang => context({ template, lang, school, settings, edit }));
   const first = contexts[0];
   const defaultSubject = first.merge(template.fields.find(f => f.key === 'subject')[first.lang]);
   const subject = (test ? '[تجربة] ' : '') + (first.plain('subject') || defaultSubject).slice(0, 160);
   const sections = contexts.map((c, i) => `<tr><td class="sm-pad" style="padding:${i ? '28px 34px 30px' : '30px 34px'};${i ? `border-top:6px solid ${PAGE}` : ''}">${bodies[template.id](c)}</td></tr>`).join('');
   const footer = contexts.map(c => {
-    const company = esc(c.english ? settings.footerEn : settings.footerAr), reason = esc(c.merge(c.english ? settings.reasonEn : settings.reasonAr));
-    const site = settings.websiteLabel ? `<a href="${esc(settings.website)}" style="color:${BLUE}">${esc(settings.websiteLabel)}</a>` : '';
-    const unsubscribe = unsubscribeUrl ? `<a href="${esc(unsubscribeUrl)}" style="color:${MUTED}">${esc(c.english ? settings.unsubscribeEn : settings.unsubscribeAr)}</a>` : '';
+    const company = c.s('footerAr', 'footerEn'), reason = c.s('reasonAr', 'reasonEn', true);
+    const site = settings.websiteLabel ? `<a href="${edit ? '#' : esc(settings.website)}" style="color:${BLUE}">${esc(settings.websiteLabel)}</a>` : '';
+    const unsubscribe = unsubscribeUrl || edit ? `<a href="${edit ? '#' : esc(unsubscribeUrl)}" style="color:${MUTED}">${c.s('unsubscribeAr', 'unsubscribeEn')}</a>` : '';
     return `<div dir="${c.dir}" style="font-family:${c.font};font-size:12px;line-height:1.9;color:${MUTED};text-align:center">${[company, site].filter(Boolean).join(' · ')}${company || site ? '<br>' : ''}${[reason, unsubscribe].filter(Boolean).join(' ')}</div>`;
   }).join('<div style="height:8px;line-height:8px;font-size:0">&nbsp;</div>');
   const preview = esc(first.plain(template.id === 'letter' ? 'p1' : template.id === 'question' ? 'after' : 'intro').slice(0, 140));
-  const html = `<!doctype html><html lang="${first.lang}" dir="${first.dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>${esc(subject)}</title><style>body{margin:0;padding:0}@media (max-width:620px){.sm-card{width:100%!important}.sm-pad{padding:22px 18px!important}}</style></head><body style="margin:0;padding:0;background:${PAGE}"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:${PAGE};font-size:1px;line-height:1px">${preview}</div>`
+  const html = `<!doctype html><html lang="${first.lang}" dir="${first.dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>${esc(subject)}</title><style>body{margin:0;padding:0}@media (max-width:620px){.sm-card{width:100%!important}.sm-pad{padding:22px 18px!important}}</style></head><body style="margin:0;padding:0;background:${PAGE}"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:${PAGE};font-size:1px;line-height:1px">${edit ? '' : preview}</div>`
     + table(`<tr><td align="center" style="padding:26px 12px">` + table(
-      `<tr><td align="center" style="padding:22px 34px 20px;border-bottom:1px solid ${LINE};border-top:5px solid ${BLUE};border-radius:14px 14px 0 0"><a href="${esc(settings.website)}"><img src="${LOGO_URL}" width="210" alt="INEXC Innovative Excellence — التميز الابتكاري" style="display:block;width:210px;max-width:70%;height:auto;border:0"></a></td></tr>${sections}`,
+      `<tr><td align="center" style="padding:22px 34px 20px;border-bottom:1px solid ${LINE};border-top:5px solid ${BLUE};border-radius:14px 14px 0 0"><a href="${edit ? '#' : esc(settings.website)}"><img src="${LOGO_URL}" width="210" alt="INEXC Innovative Excellence — التميز الابتكاري" style="display:block;width:210px;max-width:70%;height:auto;border:0"></a></td></tr>${sections}`,
       'width:600px;max-width:600px;background:#ffffff;border-radius:14px', 'class="sm-card" width="600" align="center" bgcolor="#ffffff"')
       + `<div style="height:18px;line-height:18px;font-size:0">&nbsp;</div>` + table(`<tr><td style="padding:0 20px">${footer}</td></tr>`, 'width:600px;max-width:600px', 'class="sm-card" width="600" align="center"') + `</td></tr>`, `width:100%;background:${PAGE}`, `width="100%" bgcolor="${PAGE}"`)
     + `</body></html>`;
+  if (edit) return { subject: first.plain('subject'), html, text: '', language: mode, replyTo: settings.replyTo };
   const text = contexts.map(c => [...texts[template.id](c).filter(Boolean), '', c.english ? settings.senderNameEn : settings.senderName, c.english ? settings.senderTitleEn : settings.senderTitle, settings.email + ' · https://wa.me/' + settings.whatsapp].join('\n')).join('\n\n———\n\n')
     + (unsubscribeUrl ? `\n\n${first.english ? settings.unsubscribeEn : settings.unsubscribeAr}: ${unsubscribeUrl}` : '');
   return { subject, html, text, language: mode, replyTo: settings.replyTo };

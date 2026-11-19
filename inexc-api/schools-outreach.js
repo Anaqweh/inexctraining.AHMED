@@ -206,7 +206,8 @@ export function installSchoolsOutreach({ app, pool, auth, sendEmail, worker = ()
     const t = template(req.body?.templateId), school = await sample(req.body);
     // معاينة نص لم يُحفظ بعد: تُدمج تعديلات المحرر فوق الإعدادات المحفوظة لهذه المعاينة فقط.
     const saved = await getSettings(), draft = req.body?.draft && typeof req.body.draft === 'object' ? schoolSettings({ ...saved, ...req.body.draft, templates: { ...saved.templates, ...(req.body.draft.templates || {}) } }) : saved;
-    const mail = renderSchoolMail({ templateId: t.id, language: language(req.body?.language), school, settings: draft, unsubscribeUrl: 'https://www.inexctraining.com/' });
+    // edit: نسخة «التعديل داخل الرسالة» — النصوص كما كُتبت مع علامات تسمح للوحة بجعلها قابلة للكتابة.
+    const mail = renderSchoolMail({ templateId: t.id, language: language(req.body?.language), school, settings: draft, unsubscribeUrl: 'https://www.inexctraining.com/', edit: req.body?.edit === true });
     res.json({ subject: mail.subject, html: mail.html, language: mail.language, school: { id: school.id || '', name: school.name, emirate: school.emirate } });
   });
 

@@ -63,11 +63,10 @@
    send.textContent=counts.selected?`إرسال إلى ${num(counts.selected)} مدرسة في ${state.emirate}`:'لا توجد مدارس مؤهلة';send.disabled=!counts.selected||overview.mailEnabled===false}
   catch(e){if(valid())box.innerHTML=`<small class="sc-error">${esc(e.message)}</small>`}
  },250)}
- function refreshPreview(draft){clearTimeout(previewTimer);previewTimer=setTimeout(async()=>{
-  if(!state.emirate||!valid())return;const editing=state.panel==='texts',frame=q(editing?'[data-sc-edit-frame]':'[data-sc-frame]'),subject=q(editing?'[data-sc-edit-subject]':'[data-sc-subject]');
-  const body={emirate:state.emirate,templateId:editing?state.editTemplate:state.templateId,language:editing?state.editLanguage:state.language,schoolId:q('[data-sc-sample]').value,...(draft?{draft}:{})};
-  try{const mail=await post('/preview',body);subject.textContent=mail.subject;frame.srcdoc=mail.html;const note=q('[data-sc-preview-note]');if(!editing)note.textContent=`معاينة باسم: ${mail.school.name} · اللغة: ${languageName[mail.language]||mail.language}`}
-  catch(e){if(valid())subject.textContent=e.message}
+ function refreshPreview(){clearTimeout(previewTimer);previewTimer=setTimeout(async()=>{
+  if(!state.emirate||!valid()||state.panel!=='send')return;
+  try{const mail=await post('/preview',{emirate:state.emirate,templateId:state.templateId,language:state.language,schoolId:q('[data-sc-sample]').value});q('[data-sc-subject]').textContent=mail.subject;q('[data-sc-frame]').srcdoc=mail.html;q('[data-sc-preview-note]').textContent=`معاينة باسم: ${mail.school.name} · اللغة: ${languageName[mail.language]||mail.language}`}
+  catch(e){if(valid())q('[data-sc-subject]').textContent=e.message}
  },300)}
 
  function renderList(){
@@ -78,29 +77,80 @@
  }
  async function loadList(){q('[data-sc-list]').innerHTML='<p class="sc-muted">جارٍ التحميل…</p>';const emirate=state.emirate;try{const data=await call('/list?emirate='+encodeURIComponent(emirate));if(emirate!==state.emirate)return;schools=data.schools;renderList()}catch(e){if(valid())q('[data-sc-list]').innerHTML=`<p class="sc-error">${esc(e.message)}</p>`}}
 
+ /* محرر القالب: الرسالة كلها أمامك قطعة واحدة، تكتب داخلها مباشرة. */
  const definition=()=>definitions.find(t=>t.id===state.editTemplate);
- function renderEditor(){
-  const t=definition();if(!t||!settings)return;const lang=state.editLanguage,saved=settings.templates?.[t.id]?.[lang]||{};
-  q('[data-sc-edit-template]').innerHTML=definitions.map(d=>`<option value="${esc(d.id)}"${d.id===t.id?' selected':''}>${esc(d.name)}</option>`).join('');
-  q('[data-sc-fields]').innerHTML=t.fields.map(f=>{const value=saved[f.key]??f[lang],rows=f.type==='list'?Math.min(9,String(value).split('\n').length+1):f.type==='text'?3:1;
-   return `<label><span>${esc(f.label)}${saved[f.key]!==undefined?' <em>معدّل</em>':''}</span>${f.type==='line'?`<input data-sc-field="${esc(f.key)}" dir="${lang==='en'?'ltr':'rtl'}" value="${esc(value)}" maxlength="220">`:`<textarea data-sc-field="${esc(f.key)}" dir="${lang==='en'?'ltr':'rtl'}" rows="${rows}" maxlength="2400">${esc(value)}</textarea>`}${f.hint?`<small>${esc(f.hint)}</small>`:''}</label>`}).join('');
-  const line=settings.emirateLines?.[state.emirate]||{},info=emirateDefaults.find(e=>e.id===state.emirate)||{};
-  q('[data-sc-contact]').innerHTML=[['senderName','اسم المرسل (عربي)'],['senderNameEn','اسم المرسل (English)','ltr'],['senderTitle','الصفة تحت الاسم (عربي)'],['senderTitleEn','الصفة تحت الاسم (English)','ltr'],['whatsapp','رقم واتساب مع رمز الدولة','ltr'],['email','البريد الظاهر في التوقيع','ltr'],['replyTo','البريد الذي تصله ردود المدارس','ltr'],['requestUrl','رابط زر «اطلبوا مقترحًا»','ltr'],['website','رابط الموقع (الشعار والتذييل)','ltr'],['websiteLabel','نص رابط الموقع في التذييل','ltr'],['footerAr','سطر الشركة في التذييل (عربي)'],['footerEn','سطر الشركة في التذييل (English)','ltr'],['reasonAr','سبب وصول الرسالة (عربي)'],['reasonEn','سبب وصول الرسالة (English)','ltr'],['unsubscribeAr','نص رابط إلغاء الاستلام (عربي)'],['unsubscribeEn','نص رابط إلغاء الاستلام (English)','ltr']].map(([key,label,dir])=>`<label><span>${label}</span><input data-sc-setting="${key}" dir="${dir||'rtl'}" value="${esc(settings[key]??'')}" maxlength="400"></label>`).join('')
-   +`<label class="sc-wide"><span>سطر الإمارة العام (عربي) — يُستبدل فيه {{emirate}} و{{authority}}</span><textarea data-sc-setting="emirateLineAr" rows="2" maxlength="400">${esc(settings.emirateLineAr)}</textarea></label><label class="sc-wide"><span>سطر الإمارة العام (English)</span><textarea data-sc-setting="emirateLineEn" dir="ltr" rows="2" maxlength="400">${esc(settings.emirateLineEn)}</textarea></label>`
-   +`<h4 class="sc-wide sc-sub">خاص بمدارس ${esc(state.emirate)}</h4>`+[['nameAr','اسم الإمارة كما يظهر في الرسالة (عربي)','rtl',state.emirate==='الظفرة'?'منطقة الظفرة':state.emirate],['nameEn','اسم الإمارة (English)','ltr',info.en||''],['authorityAr','الجهة التعليمية (عربي)','rtl',info.authorityAr||''],['authorityEn','الجهة التعليمية (English)','ltr',info.authorityEn||'']].map(([key,label,dir,hint])=>`<label><span>${label}</span><input data-sc-line="${key}" dir="${dir}" value="${esc(line[key]||'')}" placeholder="${esc(hint)}" maxlength="120"></label>`).join('')+`<label class="sc-wide"><span>سطر خاص بمدارس ${esc(state.emirate)} فقط (عربي) — اتركه فارغًا لاستخدام السطر العام</span><textarea data-sc-line="ar" rows="2" maxlength="400">${esc(line.ar||'')}</textarea></label><label class="sc-wide"><span>سطر خاص بمدارس ${esc(state.emirate)} فقط (English)</span><textarea data-sc-line="en" dir="ltr" rows="2" maxlength="400">${esc(line.en||'')}</textarea></label>`;
-  refreshPreview(collect());
- }
- // يجمع ما في المحرر فوق الإعدادات المحفوظة. الحقل المطابق للنص الأصلي لا يُحفظ كتعديل.
+ const editor={ready:false,viewing:false,resetting:false,cache:null,focus:null,list:null};
+ const frameDoc=()=>q('[data-sc-edit-frame]').contentDocument;
+ const textOf=(node,oneLine)=>{const v=node.innerText.replace(/ /g,' ').replace(/\r/g,'');return (oneLine?v.replace(/\s*\n+\s*/g,' '):v.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n')).trim()};
+ // يقرأ قائمة من الرسالة: كل صف سطر، وأجزاؤه يفصل بينها |.
+ function listLinesFromFrame(key){const rows=new Map();frameDoc().querySelectorAll(`[data-f="${key}"][data-i]`).forEach(n=>{const i=Number(n.dataset.i);if(!rows.has(i))rows.set(i,[]);rows.get(i)[Number(n.dataset.p)]=textOf(n,true).replace(/\|/g,'/')});
+  return [...rows.keys()].sort((a,b)=>a-b).map(i=>{const parts=Array.from(rows.get(i),v=>v||'');while(parts.length>1&&!parts.at(-1))parts.pop();return parts.join(' | ')})}
+ // يجمع الحالة الحالية للمحرر فوق الإعدادات المحفوظة. ما يطابق النص الأصلي لا يُحفظ كتعديل.
  function collect(){
-  const next=JSON.parse(JSON.stringify(settings)),t=definition(),lang=state.editLanguage,values={};
-  qa('[data-sc-field]').forEach(n=>{const field=t.fields.find(f=>f.key===n.dataset.scField),value=n.value.trim();if(value!==String(field[lang]).trim())values[field.key]=value});
+  if(editor.viewing&&editor.cache)return editor.cache;
+  const next=JSON.parse(JSON.stringify(settings)),t=definition(),lang=state.editLanguage,values={...(editor.resetting?{}:next.templates?.[t.id]?.[lang]||{})};
+  const put=(field,value)=>{if(value!==String(field[lang]).trim())values[field.key]=value;else delete values[field.key]};
+  if(editor.ready){const doc=frameDoc();
+   for(const field of t.fields){
+    if(field.key==='subject')put(field,q('[data-sc-edit-subject]').value.trim());
+    else if(field.type==='list')put(field,(editor.list?.key===field.key?editor.list.lines:listLinesFromFrame(field.key)).filter(Boolean).join('\n'));
+    else{const node=doc.querySelector(`[data-f="${field.key}"]:not([data-i])`),hidden=q(`[data-sc-field="${field.key}"]`);if(node)put(field,textOf(node,field.type==='line'));else if(hidden)put(field,hidden.value.trim())}
+   }
+   doc.querySelectorAll('[data-s]').forEach(n=>{next[n.dataset.s]=textOf(n,true)});
+  }
   next.templates={...next.templates,[t.id]:{...(next.templates?.[t.id]||{}),[lang]:values}};
   qa('[data-sc-setting]').forEach(n=>{next[n.dataset.scSetting]=n.value.trim()});
   const line=Object.fromEntries(qa('[data-sc-line]').map(n=>[n.dataset.scLine,n.value.trim()]));next.emirateLines={...next.emirateLines};if(Object.values(line).some(Boolean))next.emirateLines[state.emirate]=line;else delete next.emirateLines[state.emirate];
   return next;
  }
+ function prepareFrame(){
+  const frame=q('[data-sc-edit-frame]'),doc=frame.contentDocument;if(!doc?.body)return;
+  doc.addEventListener('click',e=>{if(e.target.closest('a'))e.preventDefault()});
+  if(editor.viewing)return;
+  const style=doc.createElement('style');style.textContent='[data-f],[data-s]{outline:1px dashed #9cc3ee;outline-offset:3px;border-radius:3px;cursor:text;min-width:24px;display:inline-block;max-width:100%}[data-f]:hover,[data-s]:hover{outline-color:#0866cf;background:rgba(8,102,207,.07)}[data-f]:focus,[data-s]:focus{outline:2px solid #0866cf;background:rgba(8,102,207,.1)}[data-f]:empty:before,[data-s]:empty:before{content:attr(data-ph);opacity:.45;font-weight:400}a{cursor:text}';doc.head.append(style);
+  doc.querySelectorAll('[data-f],[data-s]').forEach(n=>{try{n.contentEditable='plaintext-only'}catch{}if(n.contentEditable!=='plaintext-only')n.contentEditable='true';n.spellcheck=false});
+  doc.addEventListener('focusin',e=>{editor.focus=e.target.closest?.('[data-f],[data-s]')||null;const row=editor.focus?.closest('[data-r]');q('[data-sc-row-remove]').disabled=!row});
+  doc.addEventListener('keydown',e=>{const n=e.target.closest?.('[data-f],[data-s]');if(e.key==='Enter'&&n&&(n.dataset.i!==undefined||n.dataset.s||definition().fields.find(f=>f.key===n.dataset.f)?.type==='line'))e.preventDefault()});
+  doc.addEventListener('input',()=>{q('[data-sc-edit-state]').textContent='تعديلات غير محفوظة'});
+  editor.ready=true;editor.list=null;
+ }
+ // يعيد رسم الرسالة في المحرر. withDraft: يحافظ على ما كُتب ولم يُحفظ بعد.
+ async function loadFrame(withDraft=false){
+  const t=definition();if(!t||!settings)return;const draft=withDraft?collect():editor.resetting?collect():null;editor.ready=false;editor.focus=null;q('[data-sc-row-remove]').disabled=true;
+  try{const mail=await post('/preview',{emirate:state.emirate,templateId:t.id,language:state.editLanguage,schoolId:q('[data-sc-sample]').value,edit:!editor.viewing,...(draft?{draft}:{})});
+   if(!withDraft&&!editor.viewing)q('[data-sc-edit-subject]').value=mail.subject;
+   const frame=q('[data-sc-edit-frame]');frame.onload=prepareFrame;frame.srcdoc=mail.html}
+  catch(e){if(valid())notice(e.message,true)}
+ }
+ function renderEditor(){
+  const t=definition();if(!t||!settings)return;const lang=state.editLanguage,saved=settings.templates?.[t.id]?.[lang]||{};
+  editor.viewing=false;editor.resetting=false;editor.cache=null;q('[data-sc-view]').textContent='معاينة كما تصل للمدرسة';q('[data-sc-edit-state]').textContent='';
+  q('[data-sc-edit-template]').innerHTML=definitions.map(d=>`<option value="${esc(d.id)}"${d.id===t.id?' selected':''}>${esc(d.name)}</option>`).join('');
+  q('[data-sc-edit-subject]').dir=lang==='en'?'ltr':'rtl';
+  // ما لا يظهر داخل الرسالة نفسها (رسالة واتساب الجاهزة) يبقى حقلًا تحتها.
+  q('[data-sc-fields]').innerHTML=t.fields.filter(f=>f.key==='waText').map(f=>`<label class="sc-wide"><span>${esc(f.label)}</span><textarea data-sc-field="${esc(f.key)}" dir="${lang==='en'?'ltr':'rtl'}" rows="2" maxlength="2400">${esc(saved[f.key]??f[lang])}</textarea>${f.hint?`<small>${esc(f.hint)}</small>`:''}</label>`).join('');
+  const line=settings.emirateLines?.[state.emirate]||{},info=emirateDefaults.find(e=>e.id===state.emirate)||{};
+  q('[data-sc-contact]').innerHTML=[['whatsapp','رقم واتساب مع رمز الدولة','ltr'],['email','البريد الظاهر في التوقيع','ltr'],['replyTo','البريد الذي تصله ردود المدارس','ltr'],['requestUrl','رابط زر «اطلبوا مقترحًا»','ltr'],['website','رابط الموقع (الشعار والتذييل)','ltr'],['websiteLabel','نص رابط الموقع في التذييل','ltr']].map(([key,label,dir])=>`<label><span>${label}</span><input data-sc-setting="${key}" dir="${dir||'rtl'}" value="${esc(settings[key]??'')}" maxlength="400"></label>`).join('')
+   +`<label class="sc-wide"><span>سطر الإمارة العام (عربي) — يظهر مكان {{emirateLine}}، ويُستبدل فيه {{emirate}} و{{authority}}</span><textarea data-sc-setting="emirateLineAr" rows="2" maxlength="400">${esc(settings.emirateLineAr)}</textarea></label><label class="sc-wide"><span>سطر الإمارة العام (English)</span><textarea data-sc-setting="emirateLineEn" dir="ltr" rows="2" maxlength="400">${esc(settings.emirateLineEn)}</textarea></label>`
+   +`<h4 class="sc-wide sc-sub">خاص بمدارس ${esc(state.emirate)}</h4>`+[['nameAr','اسم الإمارة كما يظهر في الرسالة (عربي)','rtl',state.emirate==='الظفرة'?'منطقة الظفرة':state.emirate],['nameEn','اسم الإمارة (English)','ltr',info.en||''],['authorityAr','الجهة التعليمية (عربي)','rtl',info.authorityAr||''],['authorityEn','الجهة التعليمية (English)','ltr',info.authorityEn||'']].map(([key,label,dir,hint])=>`<label><span>${label}</span><input data-sc-line="${key}" dir="${dir}" value="${esc(line[key]||'')}" placeholder="${esc(hint)}" maxlength="120"></label>`).join('')
+   +`<label class="sc-wide"><span>سطر خاص بمدارس ${esc(state.emirate)} فقط (عربي) — اتركه فارغًا لاستخدام السطر العام</span><textarea data-sc-line="ar" rows="2" maxlength="400">${esc(line.ar||'')}</textarea></label><label class="sc-wide"><span>سطر خاص بمدارس ${esc(state.emirate)} فقط (English)</span><textarea data-sc-line="en" dir="ltr" rows="2" maxlength="400">${esc(line.en||'')}</textarea></label>`;
+  loadFrame();
+ }
+ // إضافة عنصر إلى القائمة بعد الصف الذي فيه المؤشر (أو في آخرها)، أو حذف ذلك الصف.
+ function changeRows(remove){
+  if(!editor.ready||editor.viewing)return;const t=definition(),row=editor.focus?.closest('[data-r]'),key=row?.dataset.r||t.fields.find(f=>f.type==='list')?.key;if(!key||(remove&&!row))return;
+  const lines=listLinesFromFrame(key),at=row?Number(row.dataset.i):lines.length-1;
+  if(remove)lines.splice(at,1);else{const parts={points:2,steps:3,items:3,answers:1}[key]||1,en=state.editLanguage==='en';lines.splice(at+1,0,Array.from({length:parts},(_,i)=>i?(en?'Description':'الوصف'):(en?'New item':'عنصر جديد')).join(' | '))}
+  editor.list={key,lines};q('[data-sc-edit-state]').textContent='تعديلات غير محفوظة';loadFrame(true);
+ }
+ async function toggleView(){
+  if(!editor.viewing){if(!editor.ready)return;editor.cache=collect();editor.viewing=true;q('[data-sc-view]').textContent='العودة إلى التعديل'}else{editor.viewing=false;q('[data-sc-view]').textContent='معاينة كما تصل للمدرسة'}
+  const draft=editor.cache;editor.ready=false;
+  try{const t=definition(),mail=await post('/preview',{emirate:state.emirate,templateId:t.id,language:state.editLanguage,schoolId:q('[data-sc-sample]').value,edit:!editor.viewing,draft});const frame=q('[data-sc-edit-frame]');frame.onload=()=>{prepareFrame();if(!editor.viewing)editor.cache=null};frame.srcdoc=mail.html}catch(e){if(valid())notice(e.message,true)}
+  for(const s of ['[data-sc-row-add]','[data-sc-reset]'])q(s).disabled=editor.viewing;
+ }
  async function loadSettings(){try{if(!settings){const data=await call('/settings');settings=data.settings;definitions=data.templates;emirateDefaults=data.emirates||[]}renderEditor()}catch(e){if(valid())notice(e.message,true)}}
- async function saveSettings(){const b=q('[data-sc-save]');b.disabled=true;try{const data=await post('/settings',collect(),'PUT');settings=data.settings;renderEditor();notice('حُفظت النصوص. كل رسالة قادمة ستستخدمها.')}catch(e){if(valid())notice(e.message,true)}finally{b.disabled=false}}
+ async function saveSettings(){const b=q('[data-sc-save]');if(!editor.ready&&!editor.viewing)return;b.disabled=true;try{const data=await post('/settings',collect(),'PUT');settings=data.settings;renderEditor();notice('حُفظ القالب. كل رسالة قادمة ستستخدم هذا النص.')}catch(e){if(valid())notice(e.message,true)}finally{b.disabled=false}}
  async function loadCampaigns(){const box=q('[data-sc-log]');box.innerHTML='<p class="sc-muted">جارٍ التحميل…</p>';try{const {campaigns}=await call('/campaigns');
   box.innerHTML=campaigns.length?'<table><thead><tr><th>الرسالة</th><th>التاريخ</th><th>الحالة</th><th>العدد</th><th>أُرسلت</th><th>وصلت</th><th>فُتحت</th><th>نُقرت</th><th>تعذّرت</th></tr></thead><tbody>'+campaigns.map(c=>`<tr><td><strong>${esc(c.subject)}</strong></td><td>${esc(when(c.status==='scheduled'?c.scheduled_at:c.created_at))}</td><td><span class="sc-pill is-${esc(c.status)}">${esc(campaignNames[c.status]||c.status)}</span></td><td>${num(c.total_recipients)}</td><td>${num(c.sent)}</td><td>${num(c.delivered)}</td><td>${num(c.opened)}</td><td>${num(c.clicked)}</td><td>${num(c.failed)}</td></tr>`).join('')+'</tbody></table><p class="sc-muted">تفاصيل كل مستلم متاحة في «مركز الرسائل» ضمن سجل الإرسال.</p>':'<p class="sc-muted">لم تُرسل أي رسالة للمدارس بعد.</p>'}catch(e){if(valid())box.innerHTML=`<p class="sc-error">${esc(e.message)}</p>`}}
 
@@ -140,7 +190,13 @@
   <button type="button" class="sc-send-button" data-sc-send disabled>إرسال</button>
  </div><div class="sc-preview"><div class="sc-preview-bar"><label><span>المعاينة باسم مدرسة</span><select data-sc-sample></select></label><button type="button" class="light" data-sc-edit-this>تعديل نصوص هذا القالب</button></div><p class="sc-subject"><span>العنوان:</span> <strong data-sc-subject></strong></p><iframe data-sc-frame title="معاينة رسالة المدارس" sandbox=""></iframe><small data-sc-preview-note class="sc-muted"></small></div></div>
  <div data-sc-panel="list" hidden><div class="sc-toolbar"><label><span>بحث</span><input type="search" data-sc-search placeholder="اسم المدرسة أو البريد أو المنطقة"></label><label><span>عرض</span><select data-sc-list-filter><option value="">كل المدارس</option><option value="new">لم تُراسَل بعد</option><option value="sent">وصلتها رسالة</option><option value="1">أولوية 1</option><option value="2">أولوية 2</option><option value="3">أولوية 3</option><option value="noemail">بلا بريد</option><option value="excluded">مستثناة أو ألغت الاستلام</option></select></label><span data-sc-list-count class="sc-muted"></span></div><div class="sc-table" data-sc-list></div></div>
- <div class="sc-send" data-sc-panel="texts" hidden><div class="sc-controls"><div class="sc-two"><label><span>القالب</span><select data-sc-edit-template></select></label><label><span>نسخة اللغة</span><select data-sc-edit-language><option value="ar">العربية</option><option value="en">English</option></select></label></div><p class="sc-muted">كل ما يظهر في الرسالة يُعدَّل من هنا، والمعاينة تتحدث مع الكتابة. اترك أي حقل فارغًا ليختفي من الرسالة، وأضف أو احذف أسطر القوائم كما تشاء. يمكن استخدام {{school}} لاسم المدرسة، {{emirate}} للإمارة، و{{authority}} للجهة التعليمية فيها.</p><div class="sc-fields" data-sc-fields></div><h3 class="sc-step">التوقيع والتذييل وبيانات التواصل (لكل القوالب)</h3><div class="sc-fields sc-contact" data-sc-contact></div><div class="sc-test"><button type="button" data-sc-save>حفظ النصوص</button><button type="button" class="light" data-sc-reset>استعادة النص الأصلي لهذا القالب</button></div></div><div class="sc-preview"><p class="sc-subject"><span>العنوان:</span> <strong data-sc-edit-subject></strong></p><iframe data-sc-edit-frame title="معاينة النص أثناء التعديل" sandbox=""></iframe></div></div>
+ <div class="sc-editor" data-sc-panel="texts" hidden>
+  <div class="sc-editor-bar"><label><span>القالب</span><select data-sc-edit-template></select></label><label><span>نسخة اللغة</span><select data-sc-edit-language><option value="ar">العربية</option><option value="en">English</option></select></label><label class="sc-grow"><span>عنوان الرسالة</span><input data-sc-edit-subject maxlength="220"></label></div>
+  <p class="sc-muted sc-editor-hint">الرسالة كلها أمامك: اضغط على أي نص داخلها واكتب مباشرة — العنوان، الفقرات، القوائم، الزر، التوقيع والتذييل. امسح نصًا بالكامل ليختفي من الرسالة. الرموز تُستبدل عند الإرسال: {{school}} اسم المدرسة، {{emirate}} الإمارة، {{authority}} الجهة التعليمية، {{emirateLine}} سطر الإمارة.</p>
+  <div class="sc-editor-tools"><button type="button" data-sc-save>حفظ القالب</button><button type="button" class="light" data-sc-row-add>＋ عنصر جديد في القائمة</button><button type="button" class="light" data-sc-row-remove disabled>حذف العنصر المحدد</button><button type="button" class="light" data-sc-view>معاينة كما تصل للمدرسة</button><button type="button" class="light" data-sc-reset>استعادة النص الأصلي</button><span class="sc-edit-state" data-sc-edit-state role="status"></span></div>
+  <iframe data-sc-edit-frame title="محرر قالب الرسالة" sandbox="allow-same-origin"></iframe>
+  <details class="sc-more"><summary>الروابط وبيانات التواصل وإعدادات الإمارة</summary><div class="sc-fields sc-contact" data-sc-fields></div><div class="sc-fields sc-contact" data-sc-contact></div></details>
+ </div>
  <div data-sc-panel="log" hidden><div class="sc-table" data-sc-log></div></div>
 </div>`;
   main.append(section);
@@ -153,15 +209,16 @@
   q('[data-sc-templates]').onchange=e=>{state.templateId=e.target.value;renderTemplates();refreshAudience();refreshPreview()};
   q('[data-sc-language]').onchange=e=>{state.language=e.target.value;refreshAudience();refreshPreview()};
   qa('[data-sc-priority],[data-sc-only-new],[data-sc-no-personal]').forEach(n=>n.onchange=refreshAudience);q('[data-sc-limit]').oninput=refreshAudience;
-  q('[data-sc-sample]').onchange=()=>refreshPreview(state.panel==='texts'?collect():undefined);
+  q('[data-sc-sample]').onchange=()=>refreshPreview();
   q('[data-sc-test]').onclick=sendTest;q('[data-sc-send]').onclick=confirmSend;
   q('[data-sc-search]').oninput=renderList;q('[data-sc-list-filter]').onchange=renderList;
   q('[data-sc-list]').onclick=async e=>{const b=e.target.closest('[data-sc-exclude]');if(!b)return;const school=schools.find(s=>s.id===b.dataset.scExclude);if(!school)return;b.disabled=true;try{const r=await post('/'+school.id,{excluded:!school.excluded},'PATCH');school.excluded=r.excluded;renderList()}catch(err){if(valid())notice(err.message,true)}};
   q('[data-sc-edit-template]').onchange=e=>{state.editTemplate=e.target.value;renderEditor()};q('[data-sc-edit-language]').onchange=e=>{state.editLanguage=e.target.value;renderEditor()};
-  q('[data-sc-fields]').oninput=q('[data-sc-contact]').oninput=()=>refreshPreview(collect());
+  q('[data-sc-fields]').oninput=q('[data-sc-contact]').oninput=q('[data-sc-edit-subject]').oninput=()=>{q('[data-sc-edit-state]').textContent='تعديلات غير محفوظة'};
+  q('[data-sc-row-add]').onclick=()=>changeRows(false);q('[data-sc-row-remove]').onclick=()=>changeRows(true);q('[data-sc-view]').onclick=toggleView;
   q('[data-sc-save]').onclick=saveSettings;
   q('[data-sc-edit-this]').onclick=()=>{state.editTemplate=state.templateId;if(['ar','en'].includes(state.language)){state.editLanguage=state.language;q('[data-sc-edit-language]').value=state.language}showPanel('texts')};
-  q('[data-sc-reset]').onclick=()=>{const t=definition();qa('[data-sc-field]').forEach(n=>{n.value=t.fields.find(f=>f.key===n.dataset.scField)[state.editLanguage]});refreshPreview(collect());notice('عاد النص الأصلي في المحرر. اضغط «حفظ النصوص» لاعتماده.')};
+  q('[data-sc-reset]').onclick=()=>{editor.resetting=true;editor.ready=false;editor.list=null;q('[data-sc-edit-subject]').value=definition().fields.find(f=>f.key==='subject')[state.editLanguage];q('[data-sc-fields]').querySelectorAll('[data-sc-field]').forEach(n=>{n.value=definition().fields.find(f=>f.key===n.dataset.scField)[state.editLanguage]});loadFrame().then(()=>{q('[data-sc-edit-state]').textContent='تعديلات غير محفوظة'});notice('عاد النص الأصلي لهذا القالب في المحرر. اضغط «حفظ القالب» لاعتماده.')};
   try{q('[data-sc-test-email]').value=localStorage.getItem('inexc_sc_test_email')||''}catch{}
   window.addEventListener('inexc:locked',()=>{sequence++;overview=settings=null;schools=[];state.emirate='';audienceCount=null;if(dialog.open)dialog.close();for(const s of ['[data-sc-totals]','[data-sc-emirates]','[data-sc-list]','[data-sc-log]','[data-sc-audience]'])q(s).replaceChildren();qa('iframe').forEach(f=>f.srcdoc='');q('[data-sc-work]').hidden=true;notice('')});
   window.addEventListener('inexc:unlocked',()=>{if(section.classList.contains('active'))load()});
