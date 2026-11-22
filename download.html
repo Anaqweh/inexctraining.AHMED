@@ -11,43 +11,117 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://www.inexctraining.com/assets/inexc-share-1200.png">
 <style>
-*{box-sizing:border-box}html,body{margin:0;min-height:100%}body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:linear-gradient(160deg,#eef5ff 0%,#f7faff 55%,#e8f1ff 100%);color:#0f2c52;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 16px;min-height:100vh}
-.dl-card{width:100%;max-width:520px;background:#fff;border:1px solid #dfe7f0;border-radius:20px;padding:34px 30px;text-align:center;box-shadow:0 18px 50px rgba(9,75,178,.10)}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:linear-gradient(160deg,#eef5ff 0%,#f7faff 55%,#e8f1ff 100%);color:#0f2c52;display:flex;flex-direction:column;align-items:center;padding:28px 16px;min-height:100vh}
+.dl-card{width:100%;max-width:560px;background:#fff;border:1px solid #dfe7f0;border-radius:20px;padding:34px 30px;text-align:center;box-shadow:0 18px 50px rgba(9,75,178,.10);margin:auto 0}
 .dl-brand img{height:64px;width:auto;display:block;margin:0 auto 22px}
 .dl-eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.04em;color:#094bb2;background:#eaf2ff;padding:5px 12px;border-radius:999px;margin-bottom:14px}
-h1{font-size:22px;line-height:1.6;margin:0 0 8px;font-weight:700;overflow-wrap:anywhere}
+h1{font-size:22px;line-height:1.6;margin:0 0 8px;font-weight:700;overflow-wrap:anywhere}h2{font-size:18px;line-height:1.6;margin:0 0 6px;font-weight:700}
 .dl-desc{margin:0 0 18px;font-size:15px;line-height:1.9;color:#4d6480;white-space:pre-line;overflow-wrap:anywhere}
 .dl-file{margin:0 0 22px;font-size:13px;color:#667d94;overflow-wrap:anywhere}
-.dl-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:54px;padding:14px 34px;border-radius:14px;background:#094bb2;color:#fff;font-size:17px;font-weight:700;text-decoration:none;transition:background .15s}
-.dl-button:hover,.dl-button:focus-visible{background:#072f73}.dl-button:focus-visible{outline:3px solid #ffc629;outline-offset:3px}
+.dl-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:54px;padding:14px 34px;border-radius:14px;border:0;background:#094bb2;color:#fff;font:700 17px/1.4 inherit;font-family:inherit;text-decoration:none;cursor:pointer;transition:background .15s}
+.dl-button:hover,.dl-button:focus-visible{background:#072f73}.dl-button:focus-visible,.dl-option:focus-within{outline:3px solid #ffc629;outline-offset:3px}.dl-button[disabled]{opacity:.6;cursor:wait}
+.dl-button.is-whatsapp{background:#1fa855}.dl-button.is-whatsapp:hover{background:#17803f}.dl-button.is-dark{background:#072f73;color:#ffc629}.dl-button.is-light{background:#eaf2ff;color:#094bb2}.dl-button.is-small{min-height:46px;padding:10px 22px;font-size:15px}
 .dl-note{margin:16px 0 0;font-size:13px;color:#667d94}.dl-home{display:inline-block;margin-top:22px;font-size:14px;color:#094bb2}
-.dl-foot{margin-top:20px;font-size:12px;color:#7a8da3}[hidden]{display:none!important}
+.dl-foot{margin:20px 0 0;font-size:12px;color:#7a8da3}[hidden]{display:none!important}
+.dl-panel{margin-top:22px;padding:20px 18px;border-radius:16px;text-align:center}.dl-panel p{margin:0 0 14px;font-size:14px;line-height:1.9}
+.dl-share{background:#f3fbf6;border:1px solid #bfe5cf}.dl-share h2{color:#14532d}.dl-share p{color:#3f6b52}
+.dl-quiz{background:#fff9e6;border:1px solid #ffc629}.dl-quiz p{color:#6b5a1e}
+.dl-questions{text-align:right;margin:8px 0 0;padding:0;list-style:none;counter-reset:q}.dl-questions>li{counter-increment:q;margin:0 0 18px;padding:16px;border:1px solid #dfe7f0;border-radius:14px;background:#fbfdff}
+.dl-questions legend,.dl-q{font-weight:700;font-size:15px;line-height:1.8;margin:0 0 10px;padding:0}.dl-q::before{content:counter(q) ". ";color:#094bb2}
+.dl-questions fieldset{border:0;margin:0;padding:0;min-width:0}.dl-option{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border:1px solid #dfe7f0;border-radius:11px;margin-top:8px;font-size:15px;line-height:1.7;cursor:pointer;background:#fff}.dl-option input{margin-top:6px;accent-color:#094bb2;flex:none}.dl-option:has(input:checked){border-color:#094bb2;background:#eef5ff}
+.dl-form{display:grid;gap:14px;text-align:right;margin-top:14px}.dl-form label{display:grid;gap:6px;font-size:14px;font-weight:600}.dl-form input{font:16px/1.6 inherit;font-family:inherit;padding:11px 13px;border:1px solid #c9d6e5;border-radius:11px;width:100%}.dl-form small{font-weight:400;font-size:12px;color:#667d94;line-height:1.8}
+.dl-msg{margin:14px 0 0;padding:11px 14px;border-radius:11px;font-size:14px;line-height:1.8;background:#fdeeee;color:#a12626}.dl-msg.is-ok{background:#e9f7f0;color:#1d6a48}
+.dl-badge{margin:6px 0 20px;border:3px solid #094bb2;border-radius:14px;overflow:hidden;background:#f7faff}.dl-badge-top{background:linear-gradient(90deg,#094bb2,#072f73);color:#ffc629;font:700 12px/1 Arial,sans-serif;letter-spacing:.08em;padding:13px 16px;text-align:left;border-bottom:5px solid #ffc629}
+.dl-badge-body{padding:22px 16px 20px}.dl-badge-kind{font-size:22px;font-weight:800;color:#072f73;margin:0 0 8px}.dl-badge-line{font-size:13px;color:#4d6480;margin:0}.dl-badge-name{font-size:28px;font-weight:800;color:#094bb2;margin:8px auto 10px;padding-bottom:8px;border-bottom:3px solid #ffc629;display:inline-block;max-width:100%;overflow-wrap:anywhere}
+.dl-badge-text{font-size:14px;line-height:1.9;color:#0f2c52;margin:0 0 12px}.dl-badge-grade{display:inline-block;background:#072f73;color:#ffc629;font-weight:700;font-size:14px;padding:6px 16px;border-radius:999px;margin-bottom:12px}
+.dl-badge-meta{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#4d6480;flex-wrap:wrap}.dl-badge-meta b{display:block;font-size:14px;color:#072f73;direction:ltr}
+.dl-actions{display:grid;gap:10px}
 </style></head><body>
 <main class="dl-card" aria-live="polite">
  <a class="dl-brand" href="/" aria-label="INEXC — الموقع الرئيسي"><img src="/assets/inexc-approved-logo.jpg" alt="INEXC" width="170" height="70"></a>
- <div data-dl-loading><span class="dl-eyebrow">INEXC</span><h1>جارٍ تجهيز الملف…</h1></div>
- <div data-dl-ready hidden><span class="dl-eyebrow">ملف من INEXC</span><h1 data-dl-title></h1><p class="dl-desc" data-dl-desc hidden></p><p class="dl-file" data-dl-file></p><a class="dl-button" data-dl-button href="#" rel="nofollow">⬇ تحميل الملف</a><p class="dl-note">يبدأ التحميل فور الضغط على الزر.</p></div>
- <div data-dl-error hidden><span class="dl-eyebrow">INEXC</span><h1>هذا الرابط غير متاح</h1><p class="dl-desc" data-dl-message>قد يكون الملف أُزيل أو الرابط غير صحيح. تواصل معنا لنرسل لك الملف.</p></div>
- <a class="dl-home" href="/">زيارة موقع INEXC للتدريب ←</a>
+ <div data-dl-loading><span class="dl-eyebrow">INEXC</span><h1>جارٍ التجهيز…</h1></div>
+ <div data-dl-ready hidden><span class="dl-eyebrow">ملف من INEXC</span><h1 data-dl-title></h1><p class="dl-desc" data-dl-desc hidden></p><p class="dl-file" data-dl-file></p><a class="dl-button" data-dl-button href="#" rel="nofollow">تحميل الملف</a><p class="dl-note">يبدأ التحميل فور الضغط على الزر.</p>
+  <section class="dl-panel dl-share"><h2>أعجبك الملف؟ أرسله لزميل</h2><p>رسالة جاهزة تصل زميلك برابط هذه الصفحة.</p><a class="dl-button is-whatsapp is-small" data-dl-share href="#" target="_blank" rel="noopener noreferrer">مشاركة عبر واتساب</a></section>
+  <section class="dl-panel dl-quiz" data-dl-quiz-intro hidden><h2>اختبر معلوماتك واحصل على إفادة باسمك</h2><p data-dl-quiz-summary></p><button type="button" class="dl-button is-dark is-small" data-dl-quiz-start>ابدأ التقييم</button></section>
+ </div>
+ <div data-dl-quiz hidden><span class="dl-eyebrow">التقييم المعرفي</span><h1 data-dl-quiz-title></h1><p class="dl-desc" data-dl-quiz-rule></p><form data-dl-quiz-form novalidate><ol class="dl-questions" data-dl-questions></ol><button type="submit" class="dl-button" data-dl-quiz-submit>إرسال الإجابات</button><p class="dl-msg" data-dl-quiz-msg role="alert" hidden></p></form><a class="dl-home" href="#" data-dl-back>العودة إلى صفحة الملف</a></div>
+ <div data-dl-person hidden><span class="dl-eyebrow">التقدير: ناجح</span><h1>مبارك، اجتزت التقييم بنجاح</h1><p class="dl-desc">اكتب بياناتك لإصدار إفادتك باسمك.</p><form class="dl-form" data-dl-person-form novalidate><label>الاسم كما يظهر في الإفادة<input name="name" autocomplete="name" maxlength="80" required></label><label>رقم الواتساب مع مفتاح الدولة<input name="phone" type="tel" inputmode="tel" dir="ltr" autocomplete="tel" maxlength="24" placeholder="+9715XXXXXXXX" required><small>نستخدم رقمك لإرسال إفادتك وللتواصل معك حول برامج INEXC وخدماتها.</small></label><button type="submit" class="dl-button" data-dl-person-submit>إصدار الإفادة</button><p class="dl-msg" data-dl-person-msg role="alert" hidden></p></form></div>
+ <div data-dl-badge hidden><span class="dl-eyebrow">إفادة من INEXC</span>
+  <div class="dl-badge"><div class="dl-badge-top">INEXC KNOWLEDGE BADGE</div><div class="dl-badge-body"><p class="dl-badge-kind">إفادة اطّلاع واجتياز</p><p class="dl-badge-line">تشهد شركة التميّز الابتكاري بأنّ</p><p class="dl-badge-name" data-dl-badge-name></p><p class="dl-badge-text">قد اطّلع على <span data-dl-badge-title></span><br>واجتاز بنجاح التقييم المعرفي المصاحب له</p><span class="dl-badge-grade">التقدير: ناجح</span><div class="dl-badge-meta"><span>رقم الإفادة<b data-dl-badge-code></b></span><span>التاريخ<b data-dl-badge-date></b></span></div></div></div>
+  <div class="dl-actions"><a class="dl-button" data-dl-badge-pdf href="#" rel="nofollow">تحميل الإفادة PDF</a><a class="dl-button is-light is-small" data-dl-badge-linkedin href="#" target="_blank" rel="noopener noreferrer">مشاركة على لينكدإن</a><a class="dl-button is-whatsapp is-small" data-dl-badge-whatsapp href="#" target="_blank" rel="noopener noreferrer">مشاركة عبر واتساب</a></div>
+  <p class="dl-note">يمكن لأي شخص التحقق من هذه الإفادة عبر رابط هذه الصفحة.</p></div>
+ <div data-dl-error hidden><span class="dl-eyebrow">INEXC</span><h1 data-dl-error-title>هذا الرابط غير متاح</h1><p class="dl-desc" data-dl-message>قد يكون الملف أُزيل أو الرابط غير صحيح. تواصل معنا لنرسل لك الملف.</p></div>
+ <a class="dl-home" href="/">زيارة موقع INEXC للتدريب</a>
 </main>
 <p class="dl-foot">شركة التميّز الابتكاري · INEXC</p>
 <script>
 (()=>{'use strict';
- const q=s=>document.querySelector(s),api=window.INEXC_REGISTRATION_ENDPOINT;
+ const q=s=>document.querySelector(s),api=window.INEXC_REGISTRATION_ENDPOINT,views=['loading','ready','quiz','person','badge','error'];
  const size=bytes=>{const n=Number(bytes)||0;if(n>=1073741824)return (n/1073741824).toFixed(2)+' جيجابايت';if(n>=1048576)return (n/1048576).toFixed(1)+' ميجابايت';if(n>=1024)return Math.round(n/1024)+' كيلوبايت';return n+' بايت'};
- const show=name=>{for(const key of ['loading','ready','error'])q('[data-dl-'+key+']').hidden=key!==name};
- const fail=text=>{if(text)q('[data-dl-message]').textContent=text;show('error')};
- const slug=(new URLSearchParams(location.search).get('f')||'').trim().toLowerCase();
- if(!api||!/^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/.test(slug))return fail();
+ const show=name=>{for(const key of views)q('[data-dl-'+key+']').hidden=key!==name;window.scrollTo(0,0)};
+ const fail=(text,title)=>{if(text)q('[data-dl-message]').textContent=text;if(title)q('[data-dl-error-title]').textContent=title;show('error')};
+ const message=(el,text,ok=false)=>{el.textContent=text;el.hidden=!text;el.classList.toggle('is-ok',ok)};
+ const whatsapp=text=>'https://wa.me/?text='+encodeURIComponent(text);
+ const params=new URLSearchParams(location.search),slug=(params.get('f')||'').trim().toLowerCase(),code=(params.get('b')||'').trim().toUpperCase();
+ const page=extra=>location.origin+location.pathname+extra;
+ const post=async(path,data)=>{const response=await fetch(api+path,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify(data||{})});const result=await response.json().catch(()=>({}));if(!response.ok)throw Error(result.error||'تعذّر تنفيذ الطلب. أعد المحاولة.');return result};
+ function badge(item){
+  q('[data-dl-badge-name]').textContent=item.name;q('[data-dl-badge-title]').textContent=item.title;q('[data-dl-badge-code]').textContent=item.code;q('[data-dl-badge-date]').textContent=item.date;
+  const link=page('?b='+encodeURIComponent(item.code));document.title='إفادة '+item.name+' | INEXC';
+  q('[data-dl-badge-pdf]').href=api+'/external-badges/'+encodeURIComponent(item.code)+'/pdf';
+  q('[data-dl-badge-linkedin]').href='https://www.linkedin.com/sharing/share-offsite/?url='+encodeURIComponent(link);
+  q('[data-dl-badge-whatsapp]').href=whatsapp('حصلت على إفادة اطّلاع واجتياز من INEXC في: '+item.title+'\n'+link);
+  if(!code)history.replaceState(null,'',link);show('badge');
+ }
+ if(!api)return fail();
+ if(code){
+  if(!/^INX-[A-Z0-9]{8}$/.test(code))return fail('تحقق من رابط الإفادة.','هذه الإفادة غير موجودة');
+  fetch(api+'/external-badges/'+encodeURIComponent(code),{cache:'no-store'}).then(async response=>{if(response.status===404)return fail('تحقق من رابط الإفادة.','هذه الإفادة غير موجودة');if(!response.ok)return fail('تعذّر الوصول إلى الإفادة الآن. أعد المحاولة بعد قليل.');badge(await response.json())}).catch(()=>fail('تعذّر الوصول إلى الإفادة الآن. تحقق من اتصالك وأعد المحاولة.'));
+  return;
+ }
+ if(!/^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/.test(slug))return fail();
+ let item=null,answers=null;
  fetch(api+'/external-links/'+encodeURIComponent(slug),{cache:'no-store'}).then(async response=>{
   if(response.status===404)return fail();
   if(!response.ok)return fail('تعذّر الوصول إلى الملف الآن. أعد المحاولة بعد قليل.');
-  const item=await response.json();
+  item=await response.json();
   q('[data-dl-title]').textContent=item.title;document.title=item.title+' | INEXC';
   const desc=q('[data-dl-desc]');desc.textContent=item.description||'';desc.hidden=!item.description;
   q('[data-dl-file]').textContent=item.fileName+' · '+size(item.sizeBytes);
-  q('[data-dl-button]').href=api+'/external-links/'+encodeURIComponent(item.slug)+'/file';show('ready');
+  q('[data-dl-button]').href=api+'/external-links/'+encodeURIComponent(item.slug)+'/file';
+  const share=q('[data-dl-share]');share.href=whatsapp('أنصحك بهذا الملف من INEXC:\n'+item.title+'\n'+page('?f='+encodeURIComponent(item.slug)));
+  share.addEventListener('click',()=>{post('/external-links/'+encodeURIComponent(item.slug)+'/share').catch(()=>{})});
+  if(item.quizCount>1){q('[data-dl-quiz-intro]').hidden=false;q('[data-dl-quiz-summary]').textContent=item.quizCount+' أسئلة من محتوى الملف، وتصدر بعدها إفادة بهوية INEXC يمكنك مشاركتها.'}
+  show('ready');
  }).catch(()=>fail('تعذّر الوصول إلى الملف الآن. تحقق من اتصالك وأعد المحاولة.'));
+ q('[data-dl-back]').addEventListener('click',event=>{event.preventDefault();show('ready')});
+ q('[data-dl-quiz-start]').addEventListener('click',async()=>{
+  const button=q('[data-dl-quiz-start]');button.disabled=true;
+  try{const response=await fetch(api+'/external-links/'+encodeURIComponent(item.slug)+'/quiz',{cache:'no-store'});if(!response.ok)throw Error();const quiz=await response.json();
+   q('[data-dl-quiz-title]').textContent=quiz.title;q('[data-dl-quiz-rule]').textContent='أجب عن جميع الأسئلة ثم اضغط «إرسال الإجابات».';
+   const list=q('[data-dl-questions]');list.replaceChildren();
+   quiz.questions.forEach((question,index)=>{const li=document.createElement('li'),set=document.createElement('fieldset'),legend=document.createElement('legend');legend.className='dl-q';legend.textContent=question.q;set.append(legend);
+    question.options.forEach((option,choice)=>{const label=document.createElement('label'),input=document.createElement('input'),span=document.createElement('span');label.className='dl-option';input.type='radio';input.name='q'+index;input.value=String(choice);span.textContent=option;label.append(input,span);set.append(label)});
+    li.append(set);list.append(li)});
+   message(q('[data-dl-quiz-msg]'),'');show('quiz');
+  }catch{q('[data-dl-quiz-summary]').textContent='تعذّر تحميل الأسئلة الآن. أعد المحاولة بعد قليل.'}finally{button.disabled=false}
+ });
+ q('[data-dl-quiz-form]').addEventListener('submit',async event=>{
+  event.preventDefault();const form=event.currentTarget,msg=q('[data-dl-quiz-msg]'),button=q('[data-dl-quiz-submit]'),count=q('[data-dl-questions]').children.length,picked=[];
+  for(let i=0;i<count;i++){const input=form.querySelector('input[name="q'+i+'"]:checked');if(!input){message(msg,'أجب عن جميع الأسئلة أولًا. السؤال رقم '+(i+1)+' بلا إجابة.');form.querySelector('input[name="q'+i+'"]').focus();return}picked.push(Number(input.value))}
+  button.disabled=true;message(msg,'');
+  try{const result=await post('/external-links/'+encodeURIComponent(item.slug)+'/badge',{answers:picked});
+   if(!result.passed){message(msg,'لم تجتز التقييم هذه المرة. راجع الملف ثم عدّل إجاباتك وأعد الإرسال.');return}
+   answers=picked;message(q('[data-dl-person-msg]'),'');show('person');q('[data-dl-person-form] input').focus();
+  }catch(error){message(msg,error.message)}finally{button.disabled=false}
+ });
+ q('[data-dl-person-form]').addEventListener('submit',async event=>{
+  event.preventDefault();const form=event.currentTarget,msg=q('[data-dl-person-msg]'),button=q('[data-dl-person-submit]');if(!answers)return show('ready');
+  button.disabled=true;message(msg,'');
+  try{const result=await post('/external-links/'+encodeURIComponent(item.slug)+'/badge',{answers,name:form.elements.namedItem('name').value,phone:form.elements.namedItem('phone').value});
+   if(!result.badge)throw Error('تعذّر إصدار الإفادة. أعد المحاولة.');badge(result.badge);
+  }catch(error){message(msg,error.message)}finally{button.disabled=false}
+ });
 })();
 </script>
 </body></html>

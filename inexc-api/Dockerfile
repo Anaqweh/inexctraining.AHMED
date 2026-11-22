@@ -29,4 +29,4 @@ COPY course-wall.js wall-render.py ./
 
 COPY schools-outreach.js schools-mail.js schools-xlsx.js ./
 
-COPY external-links.js ./
+COPY external-links.js badge-render.py badge-logo.png ./
