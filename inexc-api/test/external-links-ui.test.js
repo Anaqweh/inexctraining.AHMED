@@ -46,3 +46,52 @@ test('download page reports missing or malformed links without calling the serve
  const missing=await visit(t,'?f=gone',async()=>({status:404,body:{}}));assert.equal(missing.document.querySelector('[data-dl-error]').hidden,false);assert.equal(missing.document.querySelector('[data-dl-ready]').hidden,true);
  const bad=await visit(t,'?f=../x',async()=>({status:200,body:{}}));assert.equal(bad.__url,undefined);assert.equal(bad.document.querySelector('[data-dl-error]').hidden,false);
 });
+
+test('admin quiz editor parses the text format, saves through PUT and reports format errors',async t=>{
+ const withQuiz={...record,badges:3,quiz:[{q:'ما الهدف؟',options:['أ','ب'],answer:1}, {q:'ثانٍ؟',options:['ج','د','هـ'],answer:0}]};
+ const h=await harness(t,(url,init)=>init?.method==='PUT'?{...withQuiz,quiz:JSON.parse(init.body).quiz}:{version:1,maxMb:300,items:[withQuiz]});
+ h.w.HTMLDialogElement.prototype.showModal=function(){this.open=true};h.w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new h.w.Event('close'))};await h.open();
+ assert.match(h.q('[data-xl-quiz]').textContent,/\(2\)/);assert.match(h.q('.xl-stats').textContent,/3\s*إفادة/);
+ h.q('[data-xl-quiz]').click();const area=h.q('[data-xl-quiz-text]');assert.equal(area.value,'ما الهدف؟\n- أ\n* ب\n\nثانٍ؟\n* ج\n- د\n- هـ');
+ area.value='سؤال بلا إجابة\n- أ\n- ب\n\nثانٍ\n* ج\n- د';h.q('[data-xl-quiz-save]').click();await tick();assert.match(h.q('[data-xl-dialog-error]').textContent,/السؤال 1.*\*/);assert.equal(h.calls.length,1);
+ area.value='س1: أول؟\n* نعم\n- لا\n\n2. ثانٍ؟\n- لا\n* نعم\n- ربما';h.q('[data-xl-quiz-save]').click();await tick();await tick();
+ const sent=JSON.parse(h.calls[1].init.body);assert.deepEqual(sent.quiz,[{q:'أول؟',options:['نعم','لا'],answer:0},{q:'ثانٍ؟',options:['لا','نعم','ربما'],answer:1}]);assert.equal(sent.active,true);assert.equal(h.q('.xl-dialog').open,false);
+ assert.match(h.q('.xl-stats').textContent,/3\s*إفادة/);
+});
+test('admin lists badge holders with escaped names',async t=>{
+ const h=await harness(t,url=>url.endsWith('/badges')?{version:1,items:[{code:'INX-ABCDEFGH',name:'<i>سارة</i>',phone:'+971501234567',created_at:'2026-11-23T00:00:00Z'}]}:{version:1,maxMb:300,items:[record]});
+ h.w.HTMLDialogElement.prototype.showModal=function(){this.open=true};h.w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new h.w.Event('close'))};await h.open();
+ h.q('[data-xl-badges]').click();await tick();await tick();assert.ok(h.calls[1].url.endsWith('/admin/external-links/'+record.id+'/badges'));
+ const row=h.q('.xl-table tbody tr');assert.equal(row.children[0].textContent,'<i>سارة</i>');assert.equal(row.querySelector('i'),null);assert.equal(row.children[1].textContent,'+971501234567');
+});
+async function journey(t,responses){
+ const dom=new JSDOM(page.replace('<script src="/inexc-registration-config.js"></script>',''),{url:'https://www.inexctraining.com/download.html?f=uae-2031',runScripts:'dangerously',beforeParse(w){w.scrollTo=()=>{};w.__calls=[];w.INEXC_REGISTRATION_ENDPOINT='https://api.example.invalid/api';w.fetch=async(url,init)=>{w.__calls.push({url,body:init?.body?JSON.parse(init.body):null});const r=await responses(url,init,w.__calls.length);return {ok:(r.status||200)<300,status:r.status||200,json:async()=>r.body}}}});
+ t.after(()=>dom.window.close());await tick();await tick();await tick();const w=dom.window;return {w,q:s=>w.document.querySelector(s),visible:name=>!w.document.querySelector('[data-dl-'+name+']').hidden};
+}
+const info={slug:'uae-2031',title:'ملخص 2031',description:'',fileName:'s.pdf',sizeBytes:10,quizCount:2,passMark:1};
+const questions={title:'ملخص 2031',passMark:1,questions:[{q:'<b>أول</b>؟',options:['أ','ب']},{q:'ثانٍ؟',options:['ج','د']}]};
+test('visitor shares, fails, retries, passes and receives a badge with PDF and share links',async t=>{
+ let attempt=0;const h=await journey(t,async(url,init)=>{
+  if(url.endsWith('/share'))return {body:{ok:true}};if(url.endsWith('/quiz'))return {body:questions};
+  if(url.endsWith('/badge')){const data=JSON.parse(init.body);if(data.name)return {status:201,body:{passed:true,badge:{code:'INX-ABCDEFGH',name:data.name,title:'ملخص 2031',date:'23 / 11 / 2026'}}};return {body:{passed:++attempt>1}}}
+  return {body:info}});
+ assert.ok(h.visible('ready'));assert.equal(h.q('[data-dl-quiz-intro]').hidden,false);
+ const share=new URL(h.q('[data-dl-share]').href);assert.equal(share.host,'wa.me');assert.match(share.searchParams.get('text'),/ملخص 2031\nhttps:\/\/www\.inexctraining\.com\/download\.html\?f=uae-2031$/);
+ h.q('[data-dl-share]').addEventListener('click',e=>e.preventDefault());h.q('[data-dl-share]').click();await tick();assert.ok(h.w.__calls.some(c=>c.url.endsWith('/external-links/uae-2031/share')));
+ h.q('[data-dl-quiz-start]').click();await tick();await tick();assert.ok(h.visible('quiz'));assert.equal(h.q('.dl-q').textContent,'<b>أول</b>؟');assert.equal(h.q('.dl-q b'),null);
+ const submit=()=>h.q('[data-dl-quiz-form]').dispatchEvent(new h.w.Event('submit',{cancelable:true,bubbles:true}));
+ submit();await tick();assert.match(h.q('[data-dl-quiz-msg]').textContent,/السؤال رقم 1/);
+ h.q('input[name=q0][value="1"]').checked=true;h.q('input[name=q1][value="0"]').checked=true;submit();await tick();await tick();
+ assert.match(h.q('[data-dl-quiz-msg]').textContent,/لم تجتز/);assert.ok(h.visible('quiz'));assert.doesNotMatch(h.w.document.body.textContent,/\d\s*من\s*\d/);
+ submit();await tick();await tick();assert.ok(h.visible('person'));
+ h.q('[name=name]').value='سارة علي';h.q('[name=phone]').value='+971501234567';h.q('[data-dl-person-form]').dispatchEvent(new h.w.Event('submit',{cancelable:true,bubbles:true}));await tick();await tick();
+ const last=h.w.__calls.at(-1);assert.deepEqual(last.body,{answers:[1,0],name:'سارة علي',phone:'+971501234567'});
+ assert.ok(h.visible('badge'));assert.equal(h.q('[data-dl-badge-name]').textContent,'سارة علي');assert.equal(h.q('[data-dl-badge-code]').textContent,'INX-ABCDEFGH');assert.match(h.q('.dl-badge-grade').textContent,/التقدير: ناجح/);
+ assert.equal(h.q('[data-dl-badge-pdf]').href,'https://api.example.invalid/api/external-badges/INX-ABCDEFGH/pdf');assert.equal(h.w.location.search,'?b=INX-ABCDEFGH');
+ assert.equal(new URL(h.q('[data-dl-badge-linkedin]').href).searchParams.get('url'),'https://www.inexctraining.com/download.html?b=INX-ABCDEFGH');
+});
+test('a file without questions shows no assessment, and a badge link opens the badge directly',async t=>{
+ const plain=await journey(t,async()=>({body:{...info,quizCount:0}}));assert.ok(plain.visible('ready'));assert.equal(plain.q('[data-dl-quiz-intro]').hidden,true);
+ const dom=new JSDOM(page.replace('<script src="/inexc-registration-config.js"></script>',''),{url:'https://www.inexctraining.com/download.html?b=inx-abcdefgh',runScripts:'dangerously',beforeParse(w){w.scrollTo=()=>{};w.INEXC_REGISTRATION_ENDPOINT='https://api.example.invalid/api';w.fetch=async url=>{w.__url=url;return {ok:true,status:200,json:async()=>({code:'INX-ABCDEFGH',name:'سارة علي',title:'ملخص 2031',date:'23 / 11 / 2026'})}}}});
+ t.after(()=>dom.window.close());await tick();await tick();await tick();assert.equal(dom.window.__url,'https://api.example.invalid/api/external-badges/INX-ABCDEFGH');assert.equal(dom.window.document.querySelector('[data-dl-badge]').hidden,false);assert.equal(dom.window.document.querySelector('[data-dl-badge-title]').textContent,'ملخص 2031');
+});
