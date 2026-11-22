@@ -12,6 +12,9 @@ const fail=(message,status=400)=>Object.assign(new Error(message),{status});
 const columns='id,slug,title,description,file_name,mime,size_bytes,views,downloads,shares,quiz,active,created_at,updated_at';
 const badgeScript=fileURLToPath(new URL('./badge-render.py',import.meta.url));
 const badgeCode=/^INX-[A-Z0-9]{8}$/;
+/* Bump when badge-render.py changes its output, so cached PDFs are drawn again. */
+const badgeRender='v2';
+export const externalBadgeFile=code=>code+'.'+badgeRender+'.pdf';
 /* Stored inside a dot-directory: the public /uploads static handler denies dotfiles, so files are reachable only through the counted download route. */
 export const externalLinksFolder='.external-links';
 
@@ -143,7 +146,7 @@ export function installExternalLinks({app,pool,auth,uploadDir,maxMb=Number(proce
   res.set('Cache-Control','no-store');if(!uuid.test(req.params.id))throw fail('الرابط غير موجود.',404);
   const codes=(await pool.query('SELECT code FROM external_link_badges WHERE link_id=$1',[req.params.id])).rows;
   const result=await pool.query('DELETE FROM external_links WHERE id=$1 RETURNING stored_name',[req.params.id]);
-  if(result.rows[0])for(const row of codes)fs.unlink(path.join(badgeDir,row.code+'.pdf'),()=>{});
+  if(result.rows[0])for(const row of codes)for(const name of [externalBadgeFile(row.code),row.code+'.pdf'])fs.unlink(path.join(badgeDir,name),()=>{});
   if(!result.rows[0])throw fail('الرابط غير موجود.',404);remove(result.rows[0].stored_name);res.json({ok:true});
  }));
 
@@ -180,7 +183,8 @@ export function installExternalLinks({app,pool,auth,uploadDir,maxMb=Number(proce
   const row=await find(req.params.slug);if(!row||!row.quiz?.length)throw fail('لا يوجد تقييم لهذا الملف.',404);
   res.set('Cache-Control','no-store').json({version:1,title:row.title,passMark:externalLinkPassMark(row.quiz.length),questions:row.quiz.map(item=>({q:item.q,options:item.options}))});
  }));
- const format=row=>{const d=new Date(row.created_at),two=n=>String(n).padStart(2,'0');const date=`${two(d.getUTCDate())} / ${two(d.getUTCMonth()+1)} / ${d.getUTCFullYear()}`;return {code:row.code,name:row.name,title:row.title,date}};
+ /* Dates on the badge follow UAE time (UTC+4, no daylight saving), not the server's UTC clock. */
+ const format=row=>{const d=new Date(new Date(row.created_at).getTime()+4*3600000),two=n=>String(n).padStart(2,'0');const date=`${two(d.getUTCDate())} / ${two(d.getUTCMonth()+1)} / ${d.getUTCFullYear()}`;return {code:row.code,name:row.name,title:row.title,date}};
  app.post('/api/external-links/:slug/badge',route(async(req,res)=>{
   res.set('Cache-Control','no-store');const row=await find(req.params.slug);if(!row||!row.quiz?.length)throw fail('لا يوجد تقييم لهذا الملف.',404);
   const answers=req.body?.answers;if(!Array.isArray(answers)||answers.length!==row.quiz.length||answers.some(a=>!Number.isInteger(a)||a<0||a>3))throw fail('أجب عن جميع الأسئلة.');
@@ -209,7 +213,7 @@ export function installExternalLinks({app,pool,auth,uploadDir,maxMb=Number(proce
   }).finally(()=>rendering.delete(file)));return rendering.get(file)};
  app.get('/api/external-badges/:code/pdf',route(async(req,res)=>{
   const row=await badge(req.params.code);if(!row)throw fail('هذه الإفادة غير موجودة.',404);
-  const file=path.join(badgeDir,row.code+'.pdf');
+  const file=path.join(badgeDir,externalBadgeFile(row.code));
   if(!fs.existsSync(file)){try{await renderBadge(format(row),file)}catch(error){console.error('badge render failed',error?.message);throw fail('تعذّر تجهيز ملف الإفادة الآن. أعد المحاولة بعد قليل.',503)}}
   res.set({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex'});
   res.download(file,'INEXC-Badge-'+row.code+'.pdf',{dotfiles:'allow'},error=>{if(error&&!res.headersSent)res.status(404).json({error:'تعذّر تنزيل الإفادة.'})});

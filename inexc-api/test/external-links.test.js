@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import express from 'express';import {PGlite} from '@electric-sql/pglite';import fs from 'node:fs/promises';import os from 'node:os';import path from 'node:path';
-import {setupExternalLinks,installExternalLinks,externalLinkSlug,externalLinksFolder} from '../external-links.js';
+import {setupExternalLinks,installExternalLinks,externalLinkSlug,externalLinksFolder,externalBadgeFile} from '../external-links.js';
 
 async function harness(t,extra={}){
  const db=new PGlite();t.after(()=>db.close());const pool={query:(sql,args)=>db.query(sql,args)};
@@ -119,9 +119,9 @@ test('badge PDF is rendered once, cached and removed with its link; shares are c
  const h=await withQuiz(t);const code=(await h.post('external-links/uae-2031/badge',{answers:right,name:'سارة علي',phone:'+971501234567'})).data.badge.code;
  const pdf=await fetch(h.origin+'/api/external-badges/'+code+'/pdf');assert.equal(pdf.status,200);const bytes=Buffer.from(await pdf.arrayBuffer());assert.equal(bytes.subarray(0,5).toString(),'%PDF-');assert.ok(bytes.length>20000);
  assert.match(pdf.headers.get('content-disposition'),new RegExp('INEXC-Badge-'+code+'\\.pdf'));
- const cached=path.join(h.uploads,externalLinksFolder,'badges',code+'.pdf');const first=(await fs.stat(cached)).mtimeMs;
+ const cached=path.join(h.uploads,externalLinksFolder,'badges',externalBadgeFile(code));const first=(await fs.stat(cached)).mtimeMs;
  assert.equal((await fetch(h.origin+'/api/external-badges/'+code+'/pdf')).status,200);assert.equal((await fs.stat(cached)).mtimeMs,first);
- assert.notEqual((await fetch(h.origin+'/uploads/'+externalLinksFolder+'/badges/'+code+'.pdf')).status,200);
+ assert.notEqual((await fetch(h.origin+'/uploads/'+externalLinksFolder+'/badges/'+externalBadgeFile(code))).status,200);
  assert.equal((await h.post('external-links/uae-2031/share')).status,200);assert.equal((await h.post('external-links/uae-2031/share')).status,200);assert.equal((await h.post('external-links/none/share')).status,404);
  assert.equal((await h.json('admin/external-links')).data.items[0].shares,2);
  assert.equal((await h.json('admin/external-links/'+h.link.id,'DELETE')).status,200);await new Promise(r=>setTimeout(r,80));
@@ -133,4 +133,12 @@ test('badge issuing is rate limited and a broken renderer reports a clear error'
  for(const n of [1,2])assert.equal((await h.post('external-links/uae-2031/badge',{answers:right,name:'متدرب رقم '+n,phone:'+97150123456'+n})).status,201);
  assert.equal((await h.post('external-links/uae-2031/badge',{answers:right,name:'متدرب رقم 3',phone:'+971501234563'})).status,429);
  const code=(await h.json('admin/external-links/'+h.link.id+'/badges')).data.items[0].code;assert.equal((await fetch(h.origin+'/api/external-badges/'+code+'/pdf')).status,503);
+});
+
+test('badge date follows UAE time across the UTC midnight boundary',async t=>{
+ const h=await withQuiz(t);const code=(await h.post('external-links/uae-2031/badge',{answers:right,name:'سارة علي',phone:'+971501234567'})).data.badge.code;
+ await h.db.query("UPDATE external_link_badges SET created_at='2026-11-22T22:55:00Z' WHERE code=$1",[code]);
+ assert.equal((await h.json('external-badges/'+code,'GET',null,false)).data.date,'23 / 11 / 2026');
+ await h.db.query("UPDATE external_link_badges SET created_at='2026-11-22T19:59:00Z' WHERE code=$1",[code]);
+ assert.equal((await h.json('external-badges/'+code,'GET',null,false)).data.date,'22 / 11 / 2026');
 });
