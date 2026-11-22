@@ -1,0 +1,53 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>تحميل ملف | INEXC</title><meta name="robots" content="noindex">
+<script src="/inexc-registration-config.js"></script>
+<meta property="og:type" content="website">
+<meta property="og:title" content="تحميل ملف | INEXC">
+<link rel="icon" href="/favicon.ico?v=20261116" sizes="any"><link rel="icon" href="/assets/inexc-favicon-192.png?v=20261116" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/assets/inexc-apple-touch-icon.png?v=20261116">
+<meta property="og:site_name" content="INEXC Training | التميز الابتكاري">
+<meta property="og:image" content="https://www.inexctraining.com/assets/inexc-share-1200.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://www.inexctraining.com/assets/inexc-share-1200.png">
+<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:linear-gradient(160deg,#eef5ff 0%,#f7faff 55%,#e8f1ff 100%);color:#0f2c52;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 16px;min-height:100vh}
+.dl-card{width:100%;max-width:520px;background:#fff;border:1px solid #dfe7f0;border-radius:20px;padding:34px 30px;text-align:center;box-shadow:0 18px 50px rgba(9,75,178,.10)}
+.dl-brand img{height:64px;width:auto;display:block;margin:0 auto 22px}
+.dl-eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.04em;color:#094bb2;background:#eaf2ff;padding:5px 12px;border-radius:999px;margin-bottom:14px}
+h1{font-size:22px;line-height:1.6;margin:0 0 8px;font-weight:700;overflow-wrap:anywhere}
+.dl-desc{margin:0 0 18px;font-size:15px;line-height:1.9;color:#4d6480;white-space:pre-line;overflow-wrap:anywhere}
+.dl-file{margin:0 0 22px;font-size:13px;color:#667d94;overflow-wrap:anywhere}
+.dl-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:54px;padding:14px 34px;border-radius:14px;background:#094bb2;color:#fff;font-size:17px;font-weight:700;text-decoration:none;transition:background .15s}
+.dl-button:hover,.dl-button:focus-visible{background:#072f73}.dl-button:focus-visible{outline:3px solid #ffc629;outline-offset:3px}
+.dl-note{margin:16px 0 0;font-size:13px;color:#667d94}.dl-home{display:inline-block;margin-top:22px;font-size:14px;color:#094bb2}
+.dl-foot{margin-top:20px;font-size:12px;color:#7a8da3}[hidden]{display:none!important}
+</style></head><body>
+<main class="dl-card" aria-live="polite">
+ <a class="dl-brand" href="/" aria-label="INEXC — الموقع الرئيسي"><img src="/assets/inexc-approved-logo.jpg" alt="INEXC" width="170" height="70"></a>
+ <div data-dl-loading><span class="dl-eyebrow">INEXC</span><h1>جارٍ تجهيز الملف…</h1></div>
+ <div data-dl-ready hidden><span class="dl-eyebrow">ملف من INEXC</span><h1 data-dl-title></h1><p class="dl-desc" data-dl-desc hidden></p><p class="dl-file" data-dl-file></p><a class="dl-button" data-dl-button href="#" rel="nofollow">⬇ تحميل الملف</a><p class="dl-note">يبدأ التحميل فور الضغط على الزر.</p></div>
+ <div data-dl-error hidden><span class="dl-eyebrow">INEXC</span><h1>هذا الرابط غير متاح</h1><p class="dl-desc" data-dl-message>قد يكون الملف أُزيل أو الرابط غير صحيح. تواصل معنا لنرسل لك الملف.</p></div>
+ <a class="dl-home" href="/">زيارة موقع INEXC للتدريب ←</a>
+</main>
+<p class="dl-foot">شركة التميّز الابتكاري · INEXC</p>
+<script>
+(()=>{'use strict';
+ const q=s=>document.querySelector(s),api=window.INEXC_REGISTRATION_ENDPOINT;
+ const size=bytes=>{const n=Number(bytes)||0;if(n>=1073741824)return (n/1073741824).toFixed(2)+' جيجابايت';if(n>=1048576)return (n/1048576).toFixed(1)+' ميجابايت';if(n>=1024)return Math.round(n/1024)+' كيلوبايت';return n+' بايت'};
+ const show=name=>{for(const key of ['loading','ready','error'])q('[data-dl-'+key+']').hidden=key!==name};
+ const fail=text=>{if(text)q('[data-dl-message]').textContent=text;show('error')};
+ const slug=(new URLSearchParams(location.search).get('f')||'').trim().toLowerCase();
+ if(!api||!/^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/.test(slug))return fail();
+ fetch(api+'/external-links/'+encodeURIComponent(slug),{cache:'no-store'}).then(async response=>{
+  if(response.status===404)return fail();
+  if(!response.ok)return fail('تعذّر الوصول إلى الملف الآن. أعد المحاولة بعد قليل.');
+  const item=await response.json();
+  q('[data-dl-title]').textContent=item.title;document.title=item.title+' | INEXC';
+  const desc=q('[data-dl-desc]');desc.textContent=item.description||'';desc.hidden=!item.description;
+  q('[data-dl-file]').textContent=item.fileName+' · '+size(item.sizeBytes);
+  q('[data-dl-button]').href=api+'/external-links/'+encodeURIComponent(item.slug)+'/file';show('ready');
+ }).catch(()=>fail('تعذّر الوصول إلى الملف الآن. تحقق من اتصالك وأعد المحاولة.'));
+})();
+</script>
+</body></html>
