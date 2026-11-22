@@ -70,16 +70,18 @@ def centered(draw, text, cx, y, path, size, fill, max_width=None):
         if not max_width or total <= max_width * K or size <= 26 * K:
             break
         size -= 4 * K
+    # Runs can use different fonts, so they are aligned on one shared baseline rather than by their tops.
+    baseline = y + max(f.getmetrics()[0] for f, *_ in parts)
     if is_latin(text):
         x = cx - total / 2
         for f, direction, shown, kwargs, width in parts:
-            draw.text((x, y), shown, font=f, fill=fill, **kwargs)
+            draw.text((x, baseline), shown, font=f, fill=fill, anchor="ls", **kwargs)
             x += width
     else:  # right-to-left line: logical order runs are placed from the right edge leftwards
         x = cx + total / 2
         for f, direction, shown, kwargs, width in parts:
             x -= width
-            draw.text((x, y), shown, font=f, fill=fill, **kwargs)
+            draw.text((x, baseline), shown, font=f, fill=fill, anchor="ls", **kwargs)
 
 def box(values):
     return [v * K for v in values]
