@@ -134,3 +134,11 @@ test('badge issuing is rate limited and a broken renderer reports a clear error'
  assert.equal((await h.post('external-links/uae-2031/badge',{answers:right,name:'متدرب رقم 3',phone:'+971501234563'})).status,429);
  const code=(await h.json('admin/external-links/'+h.link.id+'/badges')).data.items[0].code;assert.equal((await fetch(h.origin+'/api/external-badges/'+code+'/pdf')).status,503);
 });
+
+test('badge date follows UAE time across the UTC midnight boundary',async t=>{
+ const h=await withQuiz(t);const code=(await h.post('external-links/uae-2031/badge',{answers:right,name:'سارة علي',phone:'+971501234567'})).data.badge.code;
+ await h.db.query("UPDATE external_link_badges SET created_at='2026-11-22T22:55:00Z' WHERE code=$1",[code]);
+ assert.equal((await h.json('external-badges/'+code,'GET',null,false)).data.date,'23 / 11 / 2026');
+ await h.db.query("UPDATE external_link_badges SET created_at='2026-11-22T19:59:00Z' WHERE code=$1",[code]);
+ assert.equal((await h.json('external-badges/'+code,'GET',null,false)).data.date,'22 / 11 / 2026');
+});
