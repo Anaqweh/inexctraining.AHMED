@@ -13,7 +13,7 @@ const columns='id,slug,title,description,file_name,mime,size_bytes,views,downloa
 const badgeScript=fileURLToPath(new URL('./badge-render.py',import.meta.url));
 const badgeCode=/^INX-[A-Z0-9]{8}$/;
 /* Bump when badge-render.py changes its output, so cached PDFs are drawn again. */
-const badgeRender='v2';
+const badgeRender='v3';
 export const externalBadgeFile=code=>code+'.'+badgeRender+'.pdf';
 /* Stored inside a dot-directory: the public /uploads static handler denies dotfiles, so files are reachable only through the counted download route. */
 export const externalLinksFolder='.external-links';
